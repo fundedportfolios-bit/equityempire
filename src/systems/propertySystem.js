@@ -10,6 +10,7 @@
 import { PROPERTY_TYPES } from '../data/propertyTypes.js'
 import { randomInt, shuffle } from '../utils/random.js'
 import { calculateMortgagePayment } from '../utils/financeMath.js'
+import { getTotalStartupCost } from '../data/maintenanceEvents.js'
 
 // ─── Unlock logic ──────────────────────────────────────────────
 function isUnlocked(pt, state) {
@@ -78,11 +79,12 @@ function generateOption(template, difficulty, apr = DEFAULT_APR) {
 
   const netCashFlow = monthlyIncome - monthlyExpenses
 
-  const closingCosts = Math.round(purchasePrice * (template.closingCostPercent / 100))
-  const setupCost    = isSTR
+  const closingCosts       = Math.round(purchasePrice * (template.closingCostPercent / 100))
+  const setupCost          = isSTR
     ? Math.round(purchasePrice * (template.strSetupCostPercent || 0) / 100)
     : 0
-  const cashNeeded   = downPayment + closingCosts + setupCost
+  const startupActionCost  = getTotalStartupCost(template.propertyType)
+  const cashNeeded         = downPayment + closingCosts + setupCost + startupActionCost
 
   // Monthly appreciation rate from annual percentage
   const appreciationRate = template.valueGrowthPercent / 100 / 12
@@ -109,6 +111,7 @@ function generateOption(template, difficulty, apr = DEFAULT_APR) {
     downPayment,
     closingCosts,
     setupCost,
+    startupActionCost,
     cashNeeded,
     loanBalance,
     appreciationRate,
@@ -197,12 +200,13 @@ export function canAffordOption(state, option) {
 export function countAffordableTypes(state) {
   return PROPERTY_TYPES.filter(pt => {
     if (!isUnlocked(pt, state)) return false
-    const price = pt.purchasePriceMin
-    const dp    = Math.round(price * (pt.downPaymentPercent  / 100))
-    const cc    = Math.round(price * (pt.closingCostPercent  / 100))
-    const setup = pt.incomeType === 'str'
+    const price   = pt.purchasePriceMin
+    const dp      = Math.round(price * (pt.downPaymentPercent  / 100))
+    const cc      = Math.round(price * (pt.closingCostPercent  / 100))
+    const setup   = pt.incomeType === 'str'
       ? Math.round(price * (pt.strSetupCostPercent || 0) / 100)
       : 0
-    return state.cash >= dp + cc + setup
+    const startup = getTotalStartupCost(pt.propertyType)
+    return state.cash >= dp + cc + setup + startup
   }).length
 }

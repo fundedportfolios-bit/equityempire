@@ -63,15 +63,21 @@ function PropertyOption({ option, playerCash, onBuy }) {
             <span className="option-stat-value">{formatCurrency(option.setupCost)}</span>
           </div>
         )}
+        {option.startupActionCost > 0 && (
+          <div className="option-stat">
+            <span className="option-stat-label">Startup Costs</span>
+            <span className="option-stat-value">{formatCurrency(option.startupActionCost)}</span>
+          </div>
+        )}
         <div className="option-stat option-stat--highlight">
           <span className="option-stat-label">Cash Needed</span>
           <span className="option-stat-value">{formatCurrency(option.cashNeeded)}</span>
         </div>
       </div>
 
-      {option.setupCost > 0 && (
+      {option.startupActionCost > 0 && (
         <p className="option-str-note">
-          ⚠ STR requires sufficient cash for setup &amp; furnishing in addition to down payment and closing costs.
+          ⚠ Cash Needed includes ${option.startupActionCost.toLocaleString()} reserved for immediate startup costs after purchase.
         </p>
       )}
 

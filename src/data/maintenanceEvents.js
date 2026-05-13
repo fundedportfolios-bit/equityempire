@@ -141,6 +141,14 @@ export const startupActions = [
   },
 ]
 
+// Sum of worst-case startup action costs for a given property type.
+// Used to inflate cashNeeded so the player can always afford to resolve them.
+export function getTotalStartupCost(propertyTypeName) {
+  return startupActions
+    .filter(t => t.propertyType === propertyTypeName || t.propertyType === 'All')
+    .reduce((sum, t) => sum + (t.costMax || 0), 0)
+}
+
 export const preventiveMaintenance = [
   {
     maintenanceId: 'PM_ROOF_001',
