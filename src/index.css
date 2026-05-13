@@ -20,7 +20,8 @@
   --gap:         12px;
   --gap-lg:      20px;
 
-  --action-bar-height: 130px;
+  --action-bar-height: 84px;
+  --speed-row-height:  68px;
   --header-height:     60px;
 }
 
@@ -66,6 +67,7 @@ html, body {
 
 .btn-secondary { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); }
 .btn-secondary:hover:not(:disabled) { background: var(--border); }
+.btn-muted { opacity: 0.45; }
 
 .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
 .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--text-muted); }
@@ -504,6 +506,19 @@ html, body {
 .save-btn { flex-shrink: 0; }
 .dashboard-header-actions { display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; }
 .exit-btn { flex-shrink: 0; }
+.fullscreen-btn { flex-shrink: 0; font-size: 14px; }
+
+/* ─── Speed row (fixed below header in flex column) ──────────── */
+.speed-row {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  height: var(--speed-row-height);
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
 
 /* ─── Scrollable main ─────────────────────────────────────────── */
 .dashboard-main {
@@ -518,18 +533,35 @@ html, body {
 }
 
 /* ─── Stats strip ─────────────────────────────────────────────── */
+.portfolio-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+
 .stats-strip {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   background: var(--border);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   gap: 1px;
   overflow: hidden;
-}
-
-@media (min-width: 480px) {
-  .stats-strip { grid-template-columns: repeat(3, 1fr); }
 }
 
 .stat-item {
@@ -772,15 +804,12 @@ html, body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: var(--action-bar-height);
   background: var(--bg-card);
   border-top: 1px solid var(--border);
-  padding: 12px 16px;
+  padding: 10px 16px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  /* safe-area inset for phones with home bar */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
 .action-grid {
@@ -1766,6 +1795,50 @@ html, body {
   border-left: 3px solid rgba(245,158,11,0.4);
 }
 
+/* ─── Hot Deal Banner ───────────────────────────────────────────── */
+.hot-deal-banner {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 6px 12px;
+  border-radius: 8px 8px 0 0;
+  margin: -1rem -1rem 0.75rem;
+}
+
+/* ─── Deal Modifier Info (InvestModal) ─────────────────────────── */
+.deal-info {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.deal-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8rem;
+}
+.deal-info-label { color: #94a3b8; }
+.deal-info-value { color: #e2e8f0; font-weight: 500; }
+.deal-info-value--warn { color: #f59e0b; }
+.deal-vap-low     { color: #94a3b8; }
+.deal-vap-medium  { color: #60a5fa; }
+.deal-vap-high    { color: #34d399; }
+.deal-vap-extreme { color: #f472b6; }
+.deal-description {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0.25rem 0 0;
+  font-style: italic;
+}
+
 /* ─── Partial seasoning banner ─────────────────────────────────── */
 .seasoning-banner--partial {
   background: rgba(34,197,94,0.08);
@@ -2017,10 +2090,13 @@ html, body {
 .win-btn-exit:hover { background: rgba(255,255,255,0.12); }
 
 /* ─── Win Share Card (off-screen, captured as PNG) ─────────────── */
+/* transform shifts it off-screen visually but keeps it in the paint layer so
+   Chromium renders it — toPng() overrides transform:none for capture */
 .win-share-card {
   position: fixed;
-  left: -9999px;
+  left: 0;
   top: 0;
+  transform: translateY(-9999px);
   width: 640px;
   background: linear-gradient(135deg, #0f1923 0%, #16213e 55%, #0f3460 100%);
   border: 3px solid #f59e0b;
@@ -2078,6 +2154,13 @@ html, body {
 .wsc-goal-hit {
   font-size: 0.82rem;
   color: #86efac;
+}
+.wsc-makeup {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+  margin: -0.25rem 0 1.1rem;
 }
 .wsc-stats {
   display: grid;

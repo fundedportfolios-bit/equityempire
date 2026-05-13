@@ -1,0 +1,142 @@
+{
+  "conditionProfiles": [
+    {
+      "id": "excellent",
+      "label": "Excellent",
+      "scoreMin": 85,
+      "scoreMax": 100,
+      "purchasePriceMultiplierMin": 1.05,
+      "purchasePriceMultiplierMax": 1.2,
+      "monthlyExpenseMultiplier": 0.9,
+      "maintenanceRiskMultiplier": 0.75,
+      "incomeMultiplier": 1.05,
+      "immediateRepairCostPercentMin": 0,
+      "immediateRepairCostPercentMax": 1,
+      "valueAddPotential": "low"
+    },
+    {
+      "id": "good",
+      "label": "Good",
+      "scoreMin": 70,
+      "scoreMax": 84,
+      "purchasePriceMultiplierMin": 0.98,
+      "purchasePriceMultiplierMax": 1.08,
+      "monthlyExpenseMultiplier": 1,
+      "maintenanceRiskMultiplier": 1,
+      "incomeMultiplier": 1,
+      "immediateRepairCostPercentMin": 0.5,
+      "immediateRepairCostPercentMax": 2,
+      "valueAddPotential": "low"
+    },
+    {
+      "id": "average",
+      "label": "Average",
+      "scoreMin": 55,
+      "scoreMax": 69,
+      "purchasePriceMultiplierMin": 0.9,
+      "purchasePriceMultiplierMax": 1.0,
+      "monthlyExpenseMultiplier": 1.06,
+      "maintenanceRiskMultiplier": 1.12,
+      "incomeMultiplier": 0.97,
+      "immediateRepairCostPercentMin": 2,
+      "immediateRepairCostPercentMax": 5,
+      "valueAddPotential": "medium"
+    },
+    {
+      "id": "worn",
+      "label": "Worn",
+      "scoreMin": 40,
+      "scoreMax": 54,
+      "purchasePriceMultiplierMin": 0.75,
+      "purchasePriceMultiplierMax": 0.9,
+      "monthlyExpenseMultiplier": 1.18,
+      "maintenanceRiskMultiplier": 1.35,
+      "incomeMultiplier": 0.88,
+      "immediateRepairCostPercentMin": 5,
+      "immediateRepairCostPercentMax": 12,
+      "valueAddPotential": "high"
+    },
+    {
+      "id": "distressed",
+      "label": "Distressed",
+      "scoreMin": 20,
+      "scoreMax": 39,
+      "purchasePriceMultiplierMin": 0.55,
+      "purchasePriceMultiplierMax": 0.78,
+      "monthlyExpenseMultiplier": 1.38,
+      "maintenanceRiskMultiplier": 1.7,
+      "incomeMultiplier": 0.65,
+      "immediateRepairCostPercentMin": 12,
+      "immediateRepairCostPercentMax": 25,
+      "valueAddPotential": "extreme"
+    }
+  ],
+  "dealArchetypes": [
+    {
+      "id": "turnkey",
+      "label": "Turnkey",
+      "allowedConditionIds": ["excellent", "good"],
+      "purchasePriceMultiplierMin": 1.05,
+      "purchasePriceMultiplierMax": 1.18,
+      "incomeMultiplierMin": 1.0,
+      "incomeMultiplierMax": 1.08,
+      "riskModifier": -1,
+      "description": "Higher purchase price, stronger starting performance, fewer early surprises."
+    },
+    {
+      "id": "value_add",
+      "label": "Value Add",
+      "allowedConditionIds": ["average", "worn"],
+      "purchasePriceMultiplierMin": 0.82,
+      "purchasePriceMultiplierMax": 0.98,
+      "incomeMultiplierMin": 0.86,
+      "incomeMultiplierMax": 0.96,
+      "riskModifier": 1,
+      "description": "Lower starting performance with room to improve income and value through upgrades."
+    },
+    {
+      "id": "distressed_project",
+      "label": "Distressed Project",
+      "allowedConditionIds": ["distressed", "worn"],
+      "purchasePriceMultiplierMin": 0.6,
+      "purchasePriceMultiplierMax": 0.85,
+      "incomeMultiplierMin": 0.0,
+      "incomeMultiplierMax": 0.7,
+      "riskModifier": 2,
+      "description": "Cheap acquisition with major repair needs, possible downtime, and high upside."
+    },
+    {
+      "id": "under_managed",
+      "label": "Under Managed",
+      "allowedConditionIds": ["good", "average"],
+      "purchasePriceMultiplierMin": 0.9,
+      "purchasePriceMultiplierMax": 1.02,
+      "incomeMultiplierMin": 0.80,
+      "incomeMultiplierMax": 0.93,
+      "riskModifier": 1,
+      "description": "The property is decent, but current operations are weak. Better management can increase income."
+    },
+    {
+      "id": "overpriced",
+      "label": "Overpriced",
+      "allowedConditionIds": ["excellent", "good", "average"],
+      "purchasePriceMultiplierMin": 1.15,
+      "purchasePriceMultiplierMax": 1.35,
+      "incomeMultiplierMin": 0.9,
+      "incomeMultiplierMax": 1.05,
+      "riskModifier": 1,
+      "description": "Looks attractive, but the price is high compared to the income."
+    },
+    {
+      "id": "expansion_potential",
+      "label": "Expansion Potential",
+      "allowedConditionIds": ["good", "average", "worn"],
+      "purchasePriceMultiplierMin": 1.0,
+      "purchasePriceMultiplierMax": 1.2,
+      "incomeMultiplierMin": 0.88,
+      "incomeMultiplierMax": 1.0,
+      "riskModifier": 1,
+      "description": "Current numbers may be average, but the property has potential for added units, amenities, or repositioning."
+    }
+  ]
+}

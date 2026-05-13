@@ -151,6 +151,15 @@ export function processMonthlyEvents(state, difficultySettings) {
   const inflMult  = Math.pow(1 + inflationRate, gameYear)
   const totalCost = (min, max) => Math.round(randomInt(min, max) * costMult * inflMult)
 
+  // Upgrade-based maintenance reduction: every 5 upgrades halves event frequency.
+  // 0–4: ×1.0 (no reduction), 5–9: ×0.5, 10+: ×0.25
+  function upgradeMaintMult(prop) {
+    const n = (prop.completedUpgrades || []).length
+    if (n >= 10) return 0.25
+    if (n >= 5)  return 0.5
+    return 1.0
+  }
+
   const updatedProperties = state.properties.map(property => {
     let prop = { ...property }
     const newMonthsOwned = (prop.monthsOwned || 0) + 1
@@ -196,9 +205,11 @@ export function processMonthlyEvents(state, difficultySettings) {
       return true
     })
 
-    // Each eligible event is an independent Bernoulli trial with its monthlyProbability
+    // Each eligible event is an independent Bernoulli trial with its monthlyProbability.
+    // upgradeMaintMult reduces probability as the player upgrades the property.
+    const upgMult = upgradeMaintMult(prop)
     const hits = eligible.filter(evt =>
-      Math.random() < Math.min(evt.monthlyProbability * probMult, 1)
+      Math.random() < Math.min(evt.monthlyProbability * probMult * upgMult, 1)
     )
 
     if (hits.length > 0) {
@@ -257,10 +268,12 @@ export function processMonthlyEvents(state, difficultySettings) {
 
     // 6. Check preventive maintenance schedule (max 1 PM spawn per property per month)
     if (prop.activeEvents.length < 3) {
+      // upgMult < 1 increases effectiveFreq (longer interval = less frequent PM)
+      const pmUpgMult = upgradeMaintMult(prop)
       const pmDue = preventiveMaintenance.filter(t => {
         if (!matchesPropertyType(t.propertyType, prop.name)) return false
         if (prop.activeEvents.some(e => e.sourceId === t.maintenanceId)) return false
-        const effectiveFreq = Math.max(1, Math.round(t.preventiveMaintenanceFrequencyMonths / pmDivisor))
+        const effectiveFreq = Math.max(1, Math.round(t.preventiveMaintenanceFrequencyMonths / pmDivisor / pmUpgMult))
         return newMonthsOwned > 0 && newMonthsOwned % effectiveFreq === 0
       })
 
@@ -271,7 +284,7 @@ export function processMonthlyEvents(state, difficultySettings) {
           (a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4)
         )[0]
 
-        const effectiveFreq = Math.max(1, Math.round(template.preventiveMaintenanceFrequencyMonths / pmDivisor))
+        const effectiveFreq = Math.max(1, Math.round(template.preventiveMaintenanceFrequencyMonths / pmDivisor / pmUpgMult))
         const rolledCost    = totalCost(template.costMin, template.costMax)
         const instance      = makeEventInstance(
           template.maintenanceId, template.maintenanceName, 'preventiveMaintenance',

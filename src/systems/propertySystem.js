@@ -11,6 +11,7 @@ import { PROPERTY_TYPES } from '../data/propertyTypes.js'
 import { randomInt, shuffle } from '../utils/random.js'
 import { calculateMortgagePayment } from '../utils/financeMath.js'
 import { getTotalStartupCost } from '../data/maintenanceEvents.js'
+import { applyDealModifier } from './dealModifierSystem.js'
 
 // ─── Unlock logic ──────────────────────────────────────────────
 function isUnlocked(pt, state) {
@@ -46,10 +47,16 @@ function calcPITIA(purchasePrice, loanBalance, hoa, apr = DEFAULT_APR) {
 }
 
 // ─── Option generation ─────────────────────────────────────────
-function generateOption(template, difficulty, apr = DEFAULT_APR) {
-  // Round purchase price to nearest $5,000 for clean numbers
-  const rawPrice = randomInt(template.purchasePriceMin, template.purchasePriceMax)
-  const purchasePrice = Math.round(rawPrice / 5000) * 5000
+function generateOption(template, difficulty, apr = DEFAULT_APR, modifierOpts = {}) {
+  // Hot deals target the lower third of the price range
+  const priceMax = modifierOpts.forceLowPrice
+    ? Math.round(template.purchasePriceMin + (template.purchasePriceMax - template.purchasePriceMin) * 0.35)
+    : template.purchasePriceMax
+  const rawPrice = randomInt(template.purchasePriceMin, priceMax)
+  const basePurchasePrice = Math.round(rawPrice / 5000) * 5000
+
+  const deal = applyDealModifier(basePurchasePrice, modifierOpts)
+  const purchasePrice = Math.round(basePurchasePrice * deal.priceMultiplier / 5000) * 5000
 
   const downPayment = Math.round(purchasePrice * (template.downPaymentPercent / 100))
   const loanBalance = purchasePrice - downPayment
@@ -64,32 +71,40 @@ function generateOption(template, difficulty, apr = DEFAULT_APR) {
 
   let monthlyIncome = 0
   const yieldTable = template.netYieldByDifficulty
+  const yieldBoost = modifierOpts.yieldBoost || 1
   if (yieldTable && difficulty && yieldTable[difficulty] != null) {
-    // Income = PITIAUC + target net cash flow (difficulty-based % of PITIAUC)
-    const netCFPerMonth = Math.round(pitiauc * (yieldTable[difficulty] / 100))
+    const netCFPerMonth = Math.round(pitiauc * (yieldTable[difficulty] / 100) * yieldBoost)
     monthlyIncome = Math.round((pitiauc + netCFPerMonth) / 25) * 25
   } else if (template.incomeMultiplier > 0) {
     monthlyIncome = Math.round((pitiauc * template.incomeMultiplier) / 25) * 25
   }
 
-  // Expenses: PITIAUC is the carrying cost; fix_flip uses purchase-price holding cost instead
+  // Apply deal income multiplier (floor 0 — distressed deals may have zero income)
+  monthlyIncome = monthlyIncome === 0 ? 0 : Math.round((monthlyIncome * deal.incomeMultiplier) / 25) * 25
+
+  // Expenses: apply deal expense multiplier to both paths
   const monthlyExpenses = monthlyIncome === 0
-    ? Math.round((purchasePrice * (template.monthlyExpensePercent / 100)) / 12)
-    : Math.round(pitiauc)
+    ? Math.round((purchasePrice * (template.monthlyExpensePercent / 100)) / 12 * deal.expenseMultiplier)
+    : Math.round(pitiauc * deal.expenseMultiplier)
 
   const netCashFlow = monthlyIncome - monthlyExpenses
 
-  const closingCosts       = Math.round(purchasePrice * (template.closingCostPercent / 100))
-  const setupCost          = isSTR
+  const closingCosts      = Math.round(purchasePrice * (template.closingCostPercent / 100))
+  const setupCost         = isSTR
     ? Math.round(purchasePrice * (template.strSetupCostPercent || 0) / 100)
     : 0
-  const startupActionCost  = getTotalStartupCost(template.propertyType)
-  const cashNeeded         = downPayment + closingCosts + setupCost + startupActionCost
+  const startupActionCost = getTotalStartupCost(template.propertyType)
 
-  // Monthly appreciation rate from annual percentage
+  // Immediate repair cost from deal condition, capped at 30% of purchase price
+  const immediateRepairCost = Math.min(
+    deal.immediateRepairCostRaw,
+    Math.round(purchasePrice * 0.30)
+  )
+
+  const cashNeeded = downPayment + closingCosts + setupCost + startupActionCost + immediateRepairCost
+
   const appreciationRate = template.valueGrowthPercent / 100 / 12
 
-  // P&I only (excludes TI + HOA); fix_flip has no rental income so no debt service to track
   const monthlyDebtService = monthlyIncome === 0
     ? 0
     : Math.round(calculateMortgagePayment(loanBalance, apr, PITIA_TERM))
@@ -112,29 +127,140 @@ function generateOption(template, difficulty, apr = DEFAULT_APR) {
     closingCosts,
     setupCost,
     startupActionCost,
+    immediateRepairCost,
     cashNeeded,
     loanBalance,
     appreciationRate,
     monthlyDebtService,
     interestRate:    apr,
     loanTermMonths:  PITIA_TERM,
+    dealArchetypeId:           deal.dealArchetypeId,
+    dealArchetypeLabel:        deal.dealArchetypeLabel,
+    dealDescription:           deal.dealDescription,
+    conditionId:               deal.conditionId,
+    conditionLabel:            deal.conditionLabel,
+    conditionScore:            deal.conditionScore,
+    valueAddPotential:         deal.valueAddPotential,
+    maintenanceRiskMultiplier: deal.maintenanceRiskMultiplier,
   }
 }
 
-// Returns `count` randomized options from unlocked property types.
-// Cycles through available types if fewer than `count` are unlocked,
-// so the player always sees 3 options (with possible duplicates of type).
-export function generatePropertyOptions(state, count = 3) {
-  const available = PROPERTY_TYPES.filter(pt => isUnlocked(pt, state))
-  if (available.length === 0) return []
-
-  const apr      = (state.marketInterestRate ?? 0.0678) + 0.012
-  const shuffled = shuffle(available)
-  const options  = []
-  for (let i = 0; i < count; i++) {
-    options.push(generateOption(shuffled[i % shuffled.length], state.difficulty, apr))
+// Retry wrapper — returns first option under maxCashNeeded (and positive CF when required).
+// Fallback priority: cheapest positive-CF option > cheapest any option.
+function generateAffordableOption(template, difficulty, apr, maxCashNeeded, modifierOpts = {}) {
+  const needsPositiveCF = modifierOpts.requirePositiveCashFlow === true
+  let cheapest = null
+  let cheapestPositiveCF = null
+  for (let i = 0; i < 10; i++) {
+    const opt = generateOption(template, difficulty, apr, modifierOpts)
+    const cfOk = !needsPositiveCF || opt.netCashFlow > 0
+    if (opt.cashNeeded <= maxCashNeeded && cfOk) return opt
+    if (opt.netCashFlow > 0 && (!cheapestPositiveCF || opt.cashNeeded < cheapestPositiveCF.cashNeeded)) {
+      cheapestPositiveCF = opt
+    }
+    if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
   }
-  return options
+  return cheapestPositiveCF ?? cheapest
+}
+
+// Hot deal: lower price range, good/excellent condition, 50% yield boost, positive CF required.
+function generateHotDeal(template, difficulty, apr, maxCashNeeded) {
+  const opts = {
+    allowedConditionIds: ['good', 'excellent'],
+    excludeArchetypeIds: ['overpriced'],
+    forceLowPrice: true,
+    yieldBoost: 1.5,
+    requirePositiveCashFlow: true,
+  }
+  let cheapest = null
+  for (let i = 0; i < 12; i++) {
+    const opt = generateOption(template, difficulty, apr, opts)
+    if (opt.cashNeeded <= maxCashNeeded && opt.netCashFlow > 0) return { ...opt, isHotDeal: true }
+    if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
+  }
+  return { ...cheapest, isHotDeal: true }
+}
+
+// Slot spec based on how much cash the player has.
+// Each slot specifies which property type to offer and the cash budget cap.
+function buildSlots(state) {
+  const cash = state.cash
+
+  // Game start: player has no properties — 3 affordable LTRs, good condition, positive CF
+  if (state.properties.length === 0) {
+    const opts = { allowedConditionIds: ['good', 'excellent'], requirePositiveCashFlow: true }
+    return [
+      { typeId: 'single_ltr', maxCashNeeded: 50000, modifierOpts: opts },
+      { typeId: 'single_ltr', maxCashNeeded: 50000, modifierOpts: opts },
+      { typeId: 'single_ltr', maxCashNeeded: 50000, modifierOpts: opts },
+    ]
+  }
+
+  if (cash >= 200000) {
+    return [
+      { typeId: 'single_ltr',        maxCashNeeded: Math.floor(cash * 0.55) },
+      { typeId: 'single_str',        maxCashNeeded: Math.floor(cash * 0.75) },
+      { typeId: 'small_multifamily', maxCashNeeded: Math.floor(cash * 0.95) },
+    ]
+  }
+  if (cash >= 100000) {
+    return [
+      { typeId: 'single_ltr',        maxCashNeeded: Math.floor(cash * 0.60) },
+      { typeId: 'single_str',        maxCashNeeded: Math.floor(cash * 0.80) },
+      { typeId: 'small_multifamily', maxCashNeeded: Math.floor(cash * 0.95) },
+    ]
+  }
+  if (cash >= 60000) {
+    return [
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.65) },
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.85) },
+      { typeId: 'single_str', maxCashNeeded: Math.floor(cash * 0.95) },
+    ]
+  }
+  if (cash >= 50000) {
+    return [
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.60) },
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.80) },
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.95) },
+    ]
+  }
+  if (cash >= 40000) {
+    return [
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.70) },
+      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.95) },
+      { typeId: 'single_ltr', maxCashNeeded: cash },
+    ]
+  }
+  return [
+    { typeId: 'single_ltr', maxCashNeeded: cash },
+    { typeId: 'single_ltr', maxCashNeeded: cash },
+    { typeId: 'single_ltr', maxCashNeeded: cash },
+  ]
+}
+
+export function generatePropertyOptions(state) {
+  const apr       = (state.marketInterestRate ?? 0.0678) + 0.012
+  const openCount = state.investOpenCount || 0
+  const isHotDeal = openCount > 0 && openCount % 6 === 0
+
+  const slots   = buildSlots(state)
+  const options = []
+
+  // Hot deal prepended when triggered (every 6th open)
+  if (isHotDeal) {
+    const ltr = PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
+    if (ltr) options.push(generateHotDeal(ltr, state.difficulty, apr, state.cash * 0.85))
+  }
+
+  for (const slot of slots) {
+    const template = PROPERTY_TYPES.find(pt => pt.id === slot.typeId && isUnlocked(pt, state))
+      ?? PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
+    options.push(generateAffordableOption(
+      template, state.difficulty, apr, slot.maxCashNeeded, slot.modifierOpts ?? {}
+    ))
+  }
+
+  return options.filter(Boolean)
 }
 
 // ─── Instance creation ─────────────────────────────────────────
@@ -166,6 +292,15 @@ export function createPropertyInstance(option, currentMonth = null) {
     completedUpgrades: [],
     activeExpenseIncreases: [],
     revenueStartMonth: (isSTR && currentMonth != null) ? currentMonth + 2 : null,
+    immediateRepairCost:       option.immediateRepairCost       ?? 0,
+    dealArchetypeId:           option.dealArchetypeId,
+    dealArchetypeLabel:        option.dealArchetypeLabel,
+    dealDescription:           option.dealDescription,
+    conditionId:               option.conditionId,
+    conditionLabel:            option.conditionLabel,
+    conditionScore:            option.conditionScore,
+    valueAddPotential:         option.valueAddPotential,
+    maintenanceRiskMultiplier: option.maintenanceRiskMultiplier ?? 1,
   }
 }
 

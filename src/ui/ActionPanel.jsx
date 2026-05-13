@@ -24,6 +24,10 @@ function formatDateParts(monthLabel) {
   return { month: parts[0] ?? '', year: parts[1] ?? '' }
 }
 
+function upgradeCost(template, units) {
+  return (template.baseCost || 0) + (template.unitCostFactor || 0) * (units ?? 1)
+}
+
 export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, onTriviaToggle }) {
   const { state, dispatch } = useGame()
 
@@ -50,7 +54,6 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
       setSpeedState('paused')
       setProgress(0)
     } else if (state.properties.length > 0 && !hasManuallyStopped.current) {
-      // Critical event resolved — resume at last player-selected speed
       setSpeedState(lastSpeedRef.current)
     }
   }, [state.isPaused])
@@ -111,10 +114,11 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
   const maintenanceCount = state.properties.reduce((n, p) => n + (p.activeEvents?.length || 0), 0)
 
   const upgradeCount = useMemo(
-    () => state.properties.reduce((n, p) => n + getAvailableUpgrades(p).length, 0),
-    // rerun when properties are added/removed or upgrades are installed
+    () => state.properties.reduce((n, p) => {
+      return n + getAvailableUpgrades(p).filter(t => upgradeCost(t, p.units) <= state.cash).length
+    }, 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.properties.map(p => p.id + (p.completedUpgrades?.length ?? 0)).join()]
+    [state.properties.map(p => p.id + (p.completedUpgrades?.length ?? 0)).join(), state.cash]
   )
 
   const refiPotential = useMemo(
@@ -134,8 +138,8 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
       badges:   affordableCount > 0 ? [`${affordableCount} Available`] : [],
     },
     upgrade: {
-      disabled: false,
-      badges:   upgradeCount > 0 ? [`${upgradeCount} Upgrades`] : [],
+      disabled: upgradeCount === 0,
+      badges:   upgradeCount > 0 ? [`${upgradeCount} Affordable`] : [],
     },
     refinance: {
       disabled: refiPotential <= 0,
@@ -153,44 +157,9 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
   const { month, year } = formatDateParts(dateLabel)
 
   return (
-    <nav className="action-panel">
-      <div className="action-grid">
-        {ACTIONS.map(action => {
-          if (action.isToggle) {
-            const on = state.triviaEnabled !== false
-            return (
-              <button
-                key={action.id}
-                className={`action-btn action-btn--toggle${on ? ' action-btn--toggle-on' : ' action-btn--toggle-off'}`}
-                onClick={onTriviaToggle}
-                title={on ? 'Knowledge Power-Up: ON — click to disable' : 'Knowledge Power-Up: OFF — click to enable'}
-              >
-                <span className="action-icon">{action.icon}</span>
-                <span className="action-label">{action.label}</span>
-                <span className="action-toggle-badge">{on ? 'ON' : 'OFF'}</span>
-              </button>
-            )
-          }
-          const meta = btnMeta[action.id] || { disabled: false, badges: [] }
-          return (
-            <button
-              key={action.id}
-              className={`action-btn action-btn--live${action.id === 'staff' ? ' action-btn--staff' : ''}${meta.disabled ? ' action-btn--muted' : ''}`}
-              disabled={meta.disabled}
-              onClick={() => handlers[action.id]?.()}
-            >
-              <span className="action-icon">{action.icon}</span>
-              <span className="action-label">{action.label}</span>
-              {meta.badges.map(b => (
-                <span key={b} className="action-badge">{b}</span>
-              ))}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="time-control-panel">
-        {/* Speed Controls — 50% */}
+    <>
+      <div className="speed-row">
+        {/* Speed Controls */}
         <div className="speed-controls">
           <span className="tc-label">SPEED</span>
           <div className="speed-btn-row">
@@ -220,7 +189,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
           )}
         </div>
 
-        {/* Month Progress — 25% */}
+        {/* Month Progress */}
         <div className="month-progress">
           <span className="tc-label">MONTH</span>
           <div className="month-bar-track">
@@ -231,12 +200,49 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
           </div>
         </div>
 
-        {/* Date Display — 25% */}
+        {/* Date Display */}
         <div className="date-display">
           <span className="date-month">{month}</span>
           <span className="date-year">{year}</span>
         </div>
       </div>
-    </nav>
+
+      <nav className="action-panel">
+        <div className="action-grid">
+          {ACTIONS.map(action => {
+            if (action.isToggle) {
+              const on = state.triviaEnabled !== false
+              return (
+                <button
+                  key={action.id}
+                  className={`action-btn action-btn--toggle${on ? ' action-btn--toggle-on' : ' action-btn--toggle-off'}`}
+                  onClick={onTriviaToggle}
+                  title={on ? 'Knowledge Power-Up: ON — click to disable' : 'Knowledge Power-Up: OFF — click to enable'}
+                >
+                  <span className="action-icon">{action.icon}</span>
+                  <span className="action-label">{action.label}</span>
+                  <span className="action-toggle-badge">{on ? 'ON' : 'OFF'}</span>
+                </button>
+              )
+            }
+            const meta = btnMeta[action.id] || { disabled: false, badges: [] }
+            return (
+              <button
+                key={action.id}
+                className={`action-btn action-btn--live${action.id === 'staff' ? ' action-btn--staff' : ''}${meta.disabled ? ' action-btn--muted' : ''}`}
+                disabled={meta.disabled}
+                onClick={() => handlers[action.id]?.()}
+              >
+                <span className="action-icon">{action.icon}</span>
+                <span className="action-label">{action.label}</span>
+                {meta.badges.map(b => (
+                  <span key={b} className="action-badge">{b}</span>
+                ))}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+    </>
   )
 }

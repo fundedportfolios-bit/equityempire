@@ -52,6 +52,10 @@ export function setModalOpen(open) {
   return { type: 'SET_MODAL_OPEN', payload: { open } }
 }
 
+export function openInvestModal() {
+  return { type: 'OPEN_INVEST_MODAL' }
+}
+
 export function saveGame(state) {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state))

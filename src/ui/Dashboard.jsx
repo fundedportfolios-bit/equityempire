@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGame } from '../core/gameState.js'
-import { setModalOpen, toggleTrivia } from '../core/gameEngine.js'
+import { setModalOpen, toggleTrivia, openInvestModal } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
 import PortfolioSummary from './PortfolioSummary.jsx'
 import AlertsPanel from './AlertsPanel.jsx'
@@ -38,13 +38,21 @@ export default function Dashboard({ onSave, onExit }) {
   return (
     <div className="dashboard">
       <header className="dashboard-header">
-        <h1 className="game-title">Equity Empire<span className="game-version">v3.1</span></h1>
+        <h1 className="game-title">Equity Empire<span className="game-version">v4.0</span></h1>
         <div className="dashboard-header-actions">
           <button
             className="btn btn-ghost btn-sm report-btn"
             onClick={() => { dispatch(setModalOpen(true)); setReportOpen(true) }}
           >
             Report
+          </button>
+          <button
+            className="btn btn-ghost btn-sm fullscreen-btn"
+            onClick={() => document.documentElement.requestFullscreen?.()}
+            title="Fullscreen"
+            aria-label="Fullscreen"
+          >
+            ⛶
           </button>
           <button className="btn btn-ghost btn-sm save-btn" onClick={onSave}>
             Save
@@ -57,6 +65,14 @@ export default function Dashboard({ onSave, onExit }) {
         </div>
       </header>
 
+      <ActionPanel
+        onInvest={() => { dispatch(openInvestModal()); setActiveModal({ type: 'invest' }) }}
+        onManage={() => openModal({ type: 'upgradeAll' })}
+        onRefinance={() => openModal({ type: 'portfolioRefi' })}
+        onStaff={() => openModal({ type: 'staff' })}
+        onTriviaToggle={() => dispatch(toggleTrivia())}
+      />
+
       <main className="dashboard-main">
         <PortfolioSummary />
         <AlertsPanel />
@@ -65,14 +81,6 @@ export default function Dashboard({ onSave, onExit }) {
           onSellRefi={(id) => openModal({ type: 'sellRefi', propertyId: id })}
         />
       </main>
-
-      <ActionPanel
-        onInvest={() => openModal({ type: 'invest' })}
-        onManage={() => openModal({ type: 'upgradeAll' })}
-        onRefinance={() => openModal({ type: 'portfolioRefi' })}
-        onStaff={() => openModal({ type: 'staff' })}
-        onTriviaToggle={() => dispatch(toggleTrivia())}
-      />
 
       {activeModal?.type === 'invest' && (
         <InvestModal onClose={closeModal} />

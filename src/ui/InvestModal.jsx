@@ -13,6 +13,9 @@ function PropertyOption({ option, playerCash, onBuy }) {
 
   return (
     <div className={`option-card${!canAfford ? ' option-card--unaffordable' : ''}`}>
+      {option.isHotDeal && (
+        <div className="hot-deal-banner">🔥 HOT DEAL FOUND!</div>
+      )}
       <div className="option-header">
         <div className="option-header-left">
           <span className="option-icon">{option.icon}</span>
@@ -69,6 +72,12 @@ function PropertyOption({ option, playerCash, onBuy }) {
             <span className="option-stat-value">{formatCurrency(option.startupActionCost)}</span>
           </div>
         )}
+        {option.immediateRepairCost > 0 && (
+          <div className="option-stat">
+            <span className="option-stat-label">Immediate Repairs</span>
+            <span className="option-stat-value negative">{formatCurrency(option.immediateRepairCost)}</span>
+          </div>
+        )}
         <div className="option-stat option-stat--highlight">
           <span className="option-stat-label">Cash Needed</span>
           <span className="option-stat-value">{formatCurrency(option.cashNeeded)}</span>
@@ -79,6 +88,32 @@ function PropertyOption({ option, playerCash, onBuy }) {
         <p className="option-str-note">
           ⚠ Cash Needed includes ${option.startupActionCost.toLocaleString()} reserved for immediate startup costs after purchase.
         </p>
+      )}
+
+      {option.conditionLabel && (
+        <div className="deal-info">
+          <div className="deal-info-row">
+            <span className="deal-info-label">Condition</span>
+            <span className="deal-info-value">{option.conditionLabel}, {option.conditionScore}/100</span>
+          </div>
+          <div className="deal-info-row">
+            <span className="deal-info-label">Deal Type</span>
+            <span className="deal-info-value">{option.dealArchetypeLabel}</span>
+          </div>
+          {option.immediateRepairCost > 0 && (
+            <div className="deal-info-row">
+              <span className="deal-info-label">Immediate Repairs</span>
+              <span className="deal-info-value deal-info-value--warn">{formatCurrency(option.immediateRepairCost)}</span>
+            </div>
+          )}
+          <div className="deal-info-row">
+            <span className="deal-info-label">Value Add Potential</span>
+            <span className={`deal-info-value deal-vap-${option.valueAddPotential}`}>
+              {option.valueAddPotential.charAt(0).toUpperCase() + option.valueAddPotential.slice(1)}
+            </span>
+          </div>
+          <p className="deal-description">{option.dealDescription}</p>
+        </div>
       )}
 
       {!canAfford && (

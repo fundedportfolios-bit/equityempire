@@ -69,7 +69,6 @@ export default function UpgradeAllModal({ onClose }) {
 
   function handleInstall({ template, property, rolledCost, permanentRentBoost, permanentValueBoost }) {
     dispatch(installUpgrade(property.id, makeInstance(template, rolledCost, permanentRentBoost, permanentValueBoost)))
-    onClose()
   }
 
   function handleOverlayClick(e) {

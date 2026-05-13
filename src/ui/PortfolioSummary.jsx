@@ -53,28 +53,36 @@ export default function PortfolioSummary() {
 
   return (
     <section className="portfolio-summary">
-      <div className="stats-strip">
-        <StatCard label="Cash" value={formatShort(state.cash)} />
-        <StatCard label="Portfolio Value" value={formatShort(state.portfolioValue)} />
-        <StatCard label="Total Debt" value={formatShort(state.totalDebt)} />
-        <StatCard
-          label="Net Equity"
-          value={formatShort(equity)}
-          valueClass={equity >= 0 ? 'positive' : 'negative'}
-        />
-        <StatCard label="Monthly Income" value={formatShort(state.monthlyIncome)} />
-        <StatCard label="Monthly Expenses" value={formatShort(state.monthlyExpenses)} />
-        <StatCard
-          label="Net Cash Flow"
-          value={formatCashFlow(netCashFlow)}
-          valueClass={netCashFlow >= 0 ? 'positive' : 'negative'}
-        />
-        <StatCard
-          label="% Goal Achieved"
-          value={goalPctDisplay}
-          valueClass={goalClass}
-        />
-        <StatCard label="Interest Rate" value={`${displayRate}%`} />
+      <div className="stats-block">
+        <span className="stats-section-label">OVERVIEW</span>
+        <div className="stats-strip">
+          <StatCard label="Cash" value={formatShort(state.cash)} />
+          <StatCard label="Value" value={formatShort(state.portfolioValue)} />
+          <StatCard
+            label="Equity"
+            value={formatShort(equity)}
+            valueClass={equity >= 0 ? 'positive' : 'negative'}
+          />
+          <StatCard label="Debt" value={formatShort(state.totalDebt)} />
+          <StatCard
+            label="% Goal"
+            value={goalPctDisplay}
+            valueClass={goalClass}
+          />
+          <StatCard label="APR" value={`${displayRate}%`} />
+        </div>
+      </div>
+      <div className="stats-block">
+        <span className="stats-section-label">MONTHLY</span>
+        <div className="stats-strip">
+          <StatCard label="Income" value={formatShort(state.monthlyIncome)} />
+          <StatCard label="Expenses" value={formatShort(state.monthlyExpenses)} />
+          <StatCard
+            label="Net Cash Flow"
+            value={formatCashFlow(netCashFlow)}
+            valueClass={netCashFlow >= 0 ? 'positive' : 'negative'}
+          />
+        </div>
       </div>
       <PropertyTypeBar properties={state.properties} staffCount={state.staffCount || 0} />
     </section>

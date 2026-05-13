@@ -57,6 +57,9 @@ export const INITIAL_STATE = {
   gameStarted: false,
   gameOver: false,
   winner: false,
+
+  // Invest modal tracking
+  investOpenCount: 0,
 }
 
 export function gameReducer(state, action) {
@@ -442,6 +445,10 @@ export function gameReducer(state, action) {
 
     case 'SET_MODAL_OPEN': {
       return { ...state, isModalOpen: action.payload.open }
+    }
+
+    case 'OPEN_INVEST_MODAL': {
+      return { ...state, isModalOpen: true, investOpenCount: state.investOpenCount + 1 }
     }
 
     case 'SET_MARKET_RATE': {

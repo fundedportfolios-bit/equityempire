@@ -11,6 +11,23 @@ function formatTimeline(months) {
   return `${yrs} yr ${mos} mo`
 }
 
+const PROP_LABEL = {
+  'Single Long-Term Rental':  ['Long-Term Rental',  'Long-Term Rentals'],
+  'Single Short-Term Rental': ['Short-Term Rental', 'Short-Term Rentals'],
+  'Small Multifamily':        ['Multifamily',       'Multifamily'],
+  'Fix and Flip':             ['Fix & Flip',        'Fix & Flips'],
+  'Micro Resort':             ['Micro Resort',      'Micro Resorts'],
+  'Apartment Building':       ['Apt Building',      'Apt Buildings'],
+  'Apartment Complex':        ['Apt Complex',       'Apt Complexes'],
+}
+
+function buildPortfolioMakeup(properties) {
+  const counts = properties.reduce((acc, p) => { acc[p.name] = (acc[p.name] || 0) + 1; return acc }, {})
+  return Object.entries(counts)
+    .map(([name, n]) => { const [sg, pl] = PROP_LABEL[name] || [name, name + 's']; return `${n} ${n === 1 ? sg : pl}` })
+    .join(' · ')
+}
+
 export default function WinModal({ onContinue, onExit }) {
   const { state }             = useGame()
   const shareRef              = useRef(null)
@@ -32,12 +49,14 @@ export default function WinModal({ onContinue, onExit }) {
     { label: 'Monthly CF',      value: `+$${netCashFlow.toLocaleString()}/mo`, highlight: true },
   ]
 
+  const shareStats = modalStats
+
   async function handleShare() {
     if (sharing || !shareRef.current) return
     setSharing(true)
     try {
       const { toPng } = await import('html-to-image')
-      const dataUrl   = await toPng(shareRef.current, { cacheBust: true, pixelRatio: 2 })
+      const dataUrl   = await toPng(shareRef.current, { cacheBust: true, pixelRatio: 2, style: { transform: 'none' } })
       const blob      = await (await fetch(dataUrl)).blob()
       const file      = new File([blob], 'equity-empire-win.png', { type: 'image/png' })
 
@@ -93,49 +112,21 @@ export default function WinModal({ onContinue, onExit }) {
         </div>
       </div>
 
-      {/* Off-screen share card captured as the shareable image */}
       <div className="win-share-card" ref={shareRef} aria-hidden="true">
         <div className="wsc-header">
           <span className="wsc-logo">🏆 Equity Empire</span>
           <span className="wsc-badge">Goal Achieved!</span>
         </div>
 
-        <div className="wsc-hero">
-          <span className="wsc-cf-label">Monthly Cash Flow</span>
-          <span className="wsc-cf">+${netCashFlow.toLocaleString()}<span className="wsc-cf-unit">/mo</span></span>
-          <span className="wsc-goal-hit">Goal: ${goal.toLocaleString()}/mo ✓</span>
-        </div>
+        <p className="wsc-makeup">{buildPortfolioMakeup(state.properties)}</p>
 
         <div className="wsc-stats">
-          <div className="wsc-stat">
-            <span className="wsc-stat-val">${state.portfolioValue.toLocaleString()}</span>
-            <span className="wsc-stat-lbl">Portfolio Value</span>
-          </div>
-          <div className="wsc-stat">
-            <span className="wsc-stat-val">${equity.toLocaleString()}</span>
-            <span className="wsc-stat-lbl">Total Equity</span>
-          </div>
-          <div className="wsc-stat">
-            <span className="wsc-stat-val">${state.totalDebt.toLocaleString()}</span>
-            <span className="wsc-stat-lbl">Debt Leveraged</span>
-          </div>
-          <div className="wsc-stat">
-            <span className="wsc-stat-val">${state.cash.toLocaleString()}</span>
-            <span className="wsc-stat-lbl">Cash in Bank</span>
-          </div>
-          <div className="wsc-stat">
-            <span className="wsc-stat-val">{timeline}</span>
-            <span className="wsc-stat-lbl">Time to Victory</span>
-          </div>
-          <div className="wsc-stat">
-            <span className="wsc-stat-val">${startCash.toLocaleString()}</span>
-            <span className="wsc-stat-lbl">Started With</span>
-          </div>
-        </div>
-
-        <div className="wsc-footer">
-          {state.difficulty?.charAt(0).toUpperCase() + state.difficulty?.slice(1)} difficulty
-          &nbsp;·&nbsp; Equity Empire v3.1
+          {shareStats.map(s => (
+            <div className="wsc-stat" key={s.label}>
+              <span className="wsc-stat-val" style={s.highlight ? { color: '#22c55e' } : {}}>{s.value}</span>
+              <span className="wsc-stat-lbl">{s.label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
