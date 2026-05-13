@@ -10,6 +10,10 @@ export default function LoginScreen({ onLogin }) {
     onLogin({ id: payload.sub, name: payload.name, email: payload.email, picture: payload.picture })
   }
 
+  function handleGuest() {
+    onLogin({ id: 'guest', name: 'Guest', email: null, picture: null })
+  }
+
   return (
     <div className="login-screen">
       <div className="login-card">
@@ -42,6 +46,16 @@ export default function LoginScreen({ onLogin }) {
             </p>
           </div>
         )}
+
+        <div className="login-guest-section">
+          <button className="btn btn-ghost login-guest-btn" onClick={handleGuest}>
+            Play as Guest
+          </button>
+          <p className="login-guest-warning">
+            ⚠ Guest progress is stored only in this browser. Clearing your browser data,
+            switching devices, or using a private window will erase your saves.
+          </p>
+        </div>
       </div>
     </div>
   )
