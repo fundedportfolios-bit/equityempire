@@ -1320,6 +1320,80 @@ html, body {
   border-color: rgba(34,197,94,0.25);
 }
 
+/* ─── Upgrade list (UpgradeModal / UpgradeAllModal) ──────────────── */
+.upgrades-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+}
+
+.upgrade-row--unaffordable {
+  background: var(--bg-elevated);
+  opacity: 0.7;
+}
+
+.upgrade-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upgrade-row-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upgrade-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.upgrade-row-prop {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.upgrade-row-roi {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--positive);
+}
+
+.upgrade-row-roi--op {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.upgrade-row-btn {
+  flex-shrink: 0;
+  min-width: 80px;
+  text-align: center;
+}
+
 .upgrade-effects {
   display: flex;
   flex-wrap: wrap;

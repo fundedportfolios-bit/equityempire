@@ -10,7 +10,7 @@ import { formatShort } from '../utils/formatters.js'
 
 const ACTIONS = [
   { id: 'invest',    label: 'Invest',    icon: '🏠' },
-  { id: 'manage',    label: 'Manage',    icon: '🔧' },
+  { id: 'upgrade',   label: 'Upgrade',   icon: '🔧' },
   { id: 'refinance', label: 'Refinance', icon: '💰' },
   { id: 'staff',     label: 'Staff',     icon: '👤' },
   { id: 'trivia',    label: 'Trivia',    icon: '🎓', isToggle: true },
@@ -34,7 +34,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
   const speedBeforeModalRef     = useRef('paused')
   const progressRef             = useRef(0)
 
-  const handlers = { invest: onInvest, staff: onStaff, manage: onManage, refinance: onRefinance }
+  const handlers = { invest: onInvest, staff: onStaff, upgrade: onManage, refinance: onRefinance }
 
   // Auto-start at Low after first property purchased (only if no system pause is active)
   useEffect(() => {
@@ -133,12 +133,9 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
       disabled: affordableCount === 0,
       badges:   affordableCount > 0 ? [`${affordableCount} Available`] : [],
     },
-    manage: {
+    upgrade: {
       disabled: false,
-      badges: [
-        maintenanceCount > 0 ? `${maintenanceCount} Maintenance` : null,
-        upgradeCount     > 0 ? `${upgradeCount} Upgrades`        : null,
-      ].filter(Boolean),
+      badges:   upgradeCount > 0 ? [`${upgradeCount} Upgrades`] : [],
     },
     refinance: {
       disabled: refiPotential <= 0,

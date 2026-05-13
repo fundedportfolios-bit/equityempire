@@ -102,9 +102,11 @@ export default function InvestModal({ onClose }) {
   const { state, dispatch } = useGame()
   const [options, setOptions] = useState([])
 
-  // Generate options once when the modal opens
+  // Generate options once when the modal opens, sorted cheapest first
   useEffect(() => {
-    setOptions(generatePropertyOptions(state))
+    const opts = generatePropertyOptions(state)
+    opts.sort((a, b) => a.cashNeeded - b.cashNeeded)
+    setOptions(opts)
   }, [])
 
   function handleBuy(option) {

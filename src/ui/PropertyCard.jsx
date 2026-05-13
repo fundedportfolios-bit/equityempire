@@ -1,12 +1,13 @@
 import { formatShort, formatCashFlow, formatCurrency } from '../utils/formatters.js'
 import { calculateNetCashFlow } from '../utils/financeMath.js'
 import { getMaxRefiCash } from '../systems/loanSystem.js'
+import { getAvailableUpgrades } from '../systems/eventSystem.js'
 
-export default function PropertyCard({ property, onManage, onSellRefi }) {
-  const netCashFlow  = calculateNetCashFlow(property.monthlyRent, property.monthlyExpenses)
-  const equity       = property.currentValue - property.loanBalance
-  const eventCount   = (property.activeEvents || []).length
-  const maxRefiCash  = getMaxRefiCash(property)
+export default function PropertyCard({ property, onUpgrade, onSellRefi }) {
+  const netCashFlow   = calculateNetCashFlow(property.monthlyRent, property.monthlyExpenses)
+  const equity        = property.currentValue - property.loanBalance
+  const upgradeCount  = getAvailableUpgrades(property).length
+  const maxRefiCash   = getMaxRefiCash(property)
 
   return (
     <div className="property-card">
@@ -61,10 +62,10 @@ export default function PropertyCard({ property, onManage, onSellRefi }) {
       <div className="property-btn-row">
         <button
           className="btn btn-secondary btn-sm property-manage-btn"
-          onClick={() => onManage(property.id)}
+          onClick={() => onUpgrade(property.id)}
         >
-          Manage
-          {eventCount > 0 && <span className="event-badge">{eventCount}</span>}
+          Upgrade
+          {upgradeCount > 0 && <span className="event-badge">{upgradeCount}</span>}
         </button>
         <button
           className="btn btn-outline btn-sm property-sellrefi-btn"

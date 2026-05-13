@@ -7,8 +7,8 @@ import AlertsPanel from './AlertsPanel.jsx'
 import PropertyList from './PropertyList.jsx'
 import ActionPanel from './ActionPanel.jsx'
 import InvestModal from './InvestModal.jsx'
-import ManageModal from './ManageModal.jsx'
-import ManageAllModal from './ManageAllModal.jsx'
+import UpgradeModal from './UpgradeModal.jsx'
+import UpgradeAllModal from './UpgradeAllModal.jsx'
 import SellRefiModal from './SellRefiModal.jsx'
 import PortfolioRefiModal from './PortfolioRefiModal.jsx'
 import StaffPanel from './StaffPanel.jsx'
@@ -61,14 +61,14 @@ export default function Dashboard({ onSave, onExit }) {
         <PortfolioSummary />
         <AlertsPanel />
         <PropertyList
-          onManage={(id) => openModal({ type: 'manage', propertyId: id })}
+          onUpgrade={(id) => openModal({ type: 'upgrade', propertyId: id })}
           onSellRefi={(id) => openModal({ type: 'sellRefi', propertyId: id })}
         />
       </main>
 
       <ActionPanel
         onInvest={() => openModal({ type: 'invest' })}
-        onManage={() => openModal({ type: 'manageAll' })}
+        onManage={() => openModal({ type: 'upgradeAll' })}
         onRefinance={() => openModal({ type: 'portfolioRefi' })}
         onStaff={() => openModal({ type: 'staff' })}
         onTriviaToggle={() => dispatch(toggleTrivia())}
@@ -77,14 +77,14 @@ export default function Dashboard({ onSave, onExit }) {
       {activeModal?.type === 'invest' && (
         <InvestModal onClose={closeModal} />
       )}
-      {activeModal?.type === 'manage' && (
-        <ManageModal propertyId={activeModal.propertyId} onClose={closeModal} />
+      {activeModal?.type === 'upgrade' && (
+        <UpgradeModal propertyId={activeModal.propertyId} onClose={closeModal} />
       )}
       {activeModal?.type === 'sellRefi' && (
         <SellRefiModal propertyId={activeModal.propertyId} onClose={closeModal} />
       )}
-      {activeModal?.type === 'manageAll' && (
-        <ManageAllModal onClose={closeModal} />
+      {activeModal?.type === 'upgradeAll' && (
+        <UpgradeAllModal onClose={closeModal} />
       )}
       {activeModal?.type === 'portfolioRefi' && (
         <PortfolioRefiModal

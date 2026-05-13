@@ -1,7 +1,7 @@
 import { useGame } from '../core/gameState.js'
 import PropertyCard from './PropertyCard.jsx'
 
-export default function PropertyList({ onManage, onSellRefi }) {
+export default function PropertyList({ onUpgrade, onSellRefi }) {
   const { state } = useGame()
 
   return (
@@ -21,7 +21,7 @@ export default function PropertyList({ onManage, onSellRefi }) {
       ) : (
         <div className="property-grid">
           {state.properties.map(property => (
-            <PropertyCard key={property.id} property={property} onManage={onManage} onSellRefi={onSellRefi} />
+            <PropertyCard key={property.id} property={property} onUpgrade={onUpgrade} onSellRefi={onSellRefi} />
           ))}
         </div>
       )}

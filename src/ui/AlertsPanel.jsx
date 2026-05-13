@@ -53,7 +53,7 @@ export default function AlertsPanel() {
   if (rows.length === 0) {
     return (
       <section className="alerts-panel">
-        <h2 className="section-title">Alerts</h2>
+        <h2 className="section-title">Manage</h2>
         <p className="empty-state">No active issues — you're in good shape.</p>
       </section>
     )
@@ -61,7 +61,7 @@ export default function AlertsPanel() {
 
   return (
     <section className="alerts-panel">
-      <h2 className="section-title">Alerts</h2>
+      <h2 className="section-title">Manage</h2>
       <ul className="alerts-list">
         {rows.map(({ event, propertyId, label }) => {
           const canAfford  = state.cash >= event.rolledCost
