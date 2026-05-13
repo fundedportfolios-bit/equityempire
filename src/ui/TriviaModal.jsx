@@ -17,10 +17,11 @@ export default function TriviaModal() {
 
   if (!question) return null
 
-  function handleSubmit() {
-    if (selectedIndex === null) return
-    const correct = evaluateTriviaAnswer(question, selectedIndex)
+  function handleSelectAnswer(i) {
+    if (submitted) return
+    const correct = evaluateTriviaAnswer(question, i)
     const prize   = correct ? calcTriviaReward(state.portfolioValue) : 0
+    setSelectedIndex(i)
     setIsCorrect(correct)
     setReward(prize)
     setSubmitted(true)
@@ -59,21 +60,14 @@ export default function TriviaModal() {
                 {question.options.map((opt, i) => (
                   <button
                     key={i}
-                    className={`trivia-option${selectedIndex === i ? ' trivia-option--selected' : ''}`}
-                    onClick={() => setSelectedIndex(i)}
+                    className="trivia-option"
+                    onClick={() => handleSelectAnswer(i)}
                   >
                     <span className="trivia-option-letter">{LETTERS[i]}</span>
                     {opt}
                   </button>
                 ))}
               </div>
-              <button
-                className="btn btn-primary trivia-submit-btn"
-                disabled={selectedIndex === null}
-                onClick={handleSubmit}
-              >
-                Submit Answer
-              </button>
             </>
           ) : (
             <>

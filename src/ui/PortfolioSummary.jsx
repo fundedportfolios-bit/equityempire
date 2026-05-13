@@ -4,7 +4,7 @@ import { formatShort, formatCashFlow } from '../utils/formatters.js'
 
 function StatCard({ label, value, valueClass = '' }) {
   return (
-    <div className="stat-card">
+    <div className="stat-item">
       <span className="stat-label">{label}</span>
       <span className={`stat-value ${valueClass}`}>{value}</span>
     </div>
@@ -41,8 +41,7 @@ export default function PortfolioSummary() {
 
   return (
     <section className="portfolio-summary">
-      <h2 className="section-title">Portfolio Overview</h2>
-      <div className="stats-grid">
+      <div className="stats-strip">
         <StatCard label="Cash" value={formatShort(state.cash)} />
         <StatCard label="Portfolio Value" value={formatShort(state.portfolioValue)} />
         <StatCard label="Total Debt" value={formatShort(state.totalDebt)} />
@@ -59,13 +58,10 @@ export default function PortfolioSummary() {
           valueClass={netCashFlow >= 0 ? 'positive' : 'negative'}
         />
         <StatCard label="Interest Rate" value={`${displayRate}%`} />
-        <StatCard
-          label="Staff"
-          value={`👤 ${state.staffCount || 0}`}
-          valueClass="staff-stat"
-        />
+        <StatCard label="Staff" value={`👤 ${state.staffCount || 0}`} />
       </div>
       <PropertyTypeBar properties={state.properties} />
+
     </section>
   )
 }
