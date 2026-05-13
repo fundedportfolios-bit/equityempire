@@ -191,3 +191,18 @@ export function recalculatePortfolioTotals(properties, currentMonth = null) {
 export function canAffordOption(state, option) {
   return state.cash >= option.cashNeeded
 }
+
+// Count how many unlocked property types are affordable at minimum purchase price.
+// Used for the Invest button badge — avoids running the random generator.
+export function countAffordableTypes(state) {
+  return PROPERTY_TYPES.filter(pt => {
+    if (!isUnlocked(pt, state)) return false
+    const price = pt.purchasePriceMin
+    const dp    = Math.round(price * (pt.downPaymentPercent  / 100))
+    const cc    = Math.round(price * (pt.closingCostPercent  / 100))
+    const setup = pt.incomeType === 'str'
+      ? Math.round(price * (pt.strSetupCostPercent || 0) / 100)
+      : 0
+    return state.cash >= dp + cc + setup
+  }).length
+}

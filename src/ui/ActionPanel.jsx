@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useGame } from '../core/gameState.js'
 import { advanceMonth, setPaused } from '../core/gameEngine.js'
 import { formatMonthLabel } from '../core/timeSystem.js'
+import { countAffordableTypes } from '../systems/propertySystem.js'
+import { canRefinance, calcRefiOption } from '../systems/loanSystem.js'
+import { calcCurrentStaffCost } from '../systems/staffSystem.js'
+import { getAvailableUpgrades } from '../systems/eventSystem.js'
+import { formatShort } from '../utils/formatters.js'
 
 const ACTIONS = [
   { id: 'invest',    label: 'Invest',    icon: '🏠' },
@@ -97,9 +102,57 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
     setSpeedState(lastSpeedRef.current)
   }
 
+  // ─── Button badge data ─────────────────────────────────────────
+  const affordableCount = useMemo(
+    () => countAffordableTypes(state),
+    [state.cash, state.properties.length, state.marketInterestRate, state.difficulty]
+  )
+
+  const maintenanceCount = state.properties.reduce((n, p) => n + (p.activeEvents?.length || 0), 0)
+
+  const upgradeCount = useMemo(
+    () => state.properties.reduce((n, p) => n + getAvailableUpgrades(p).length, 0),
+    // rerun when properties are added/removed or upgrades are installed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.properties.map(p => p.id + (p.completedUpgrades?.length ?? 0)).join()]
+  )
+
+  const refiPotential = useMemo(
+    () => state.properties
+      .filter(p => canRefinance(p))
+      .reduce((sum, p) => sum + calcRefiOption(p, 1.0).netCash, 0),
+    [state.properties]
+  )
+
+  const staffCostPerHire = calcCurrentStaffCost(state.currentMonth)
+  const netCF            = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
+  const staffAffordable  = Math.max(0, Math.floor(netCF / staffCostPerHire))
+
+  const btnMeta = {
+    invest: {
+      disabled: affordableCount === 0,
+      badges:   affordableCount > 0 ? [`${affordableCount} Available`] : [],
+    },
+    manage: {
+      disabled: false,
+      badges: [
+        maintenanceCount > 0 ? `${maintenanceCount} Maintenance` : null,
+        upgradeCount     > 0 ? `${upgradeCount} Upgrades`        : null,
+      ].filter(Boolean),
+    },
+    refinance: {
+      disabled: refiPotential <= 0,
+      badges:   refiPotential > 0 ? [`${formatShort(refiPotential)} Potential`] : [],
+    },
+    staff: {
+      disabled: staffAffordable === 0,
+      badges:   staffAffordable > 0 ? [`${staffAffordable} Available`] : [],
+    },
+  }
+
   const isPlaying    = speed !== 'paused'
   const hasProperty  = state.properties.length > 0
-  const dateLabel  = formatMonthLabel(state.currentMonth)
+  const dateLabel    = formatMonthLabel(state.currentMonth)
   const { month, year } = formatDateParts(dateLabel)
 
   return (
@@ -121,14 +174,19 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
               </button>
             )
           }
+          const meta = btnMeta[action.id] || { disabled: false, badges: [] }
           return (
             <button
               key={action.id}
-              className={`action-btn action-btn--live${action.id === 'staff' ? ' action-btn--staff' : ''}`}
+              className={`action-btn action-btn--live${action.id === 'staff' ? ' action-btn--staff' : ''}${meta.disabled ? ' action-btn--muted' : ''}`}
+              disabled={meta.disabled}
               onClick={() => handlers[action.id]?.()}
             >
               <span className="action-icon">{action.icon}</span>
               <span className="action-label">{action.label}</span>
+              {meta.badges.map(b => (
+                <span key={b} className="action-badge">{b}</span>
+              ))}
             </button>
           )
         })}
