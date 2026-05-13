@@ -49,6 +49,10 @@ export const INITIAL_STATE = {
   cashFlowGoal: 10000,
   gameWon: false,
 
+  // Milestones
+  activeMilestone: null,
+  milestonesHit: [],
+
   // Meta
   gameStarted: false,
   gameOver: false,
@@ -159,6 +163,13 @@ export function gameReducer(state, action) {
       const newNetCF  = totals.monthlyIncome - totals.monthlyExpenses - newStaffExpense
       const justWon   = !state.gameWon && newMonth > 1 && newNetCF >= (state.cashFlowGoal || 10000)
 
+      const MILESTONES = [1000000, 5000000, 10000000, 50000000]
+      const newMilestone = MILESTONES.find(m =>
+        totals.portfolioValue >= m &&
+        !(state.milestonesHit || []).includes(m) &&
+        (state.portfolioValue || 0) < m
+      ) ?? null
+
       return {
         ...state,
         currentMonth:          newMonth,
@@ -172,10 +183,12 @@ export function gameReducer(state, action) {
         activeTriviaQuestion:  triviaQuestion,
         lastTriviaMonth:       shouldTriggerTrivia ? newMonth : (state.lastTriviaMonth ?? 0),
         usedTriviaQuestionIds: state.usedTriviaQuestionIds ?? [],
-        isModalOpen:           shouldTriggerTrivia ? true : state.isModalOpen,
+        isModalOpen:           shouldTriggerTrivia ? true : (newMilestone ? true : state.isModalOpen),
         alerts:                allAlerts,
-        isPaused:              shouldPause ? true : state.isPaused,
+        isPaused:              newMilestone ? true : (shouldPause ? true : state.isPaused),
         gameWon:               justWon ? true : state.gameWon,
+        activeMilestone:       newMilestone ?? state.activeMilestone,
+        milestonesHit:         newMilestone ? [...(state.milestonesHit || []), newMilestone] : (state.milestonesHit || []),
       }
     }
 
@@ -465,6 +478,13 @@ export function gameReducer(state, action) {
         properties:    migratedProperties,
         gameStarted:   true,
       }
+    }
+
+    case 'DISMISS_MILESTONE': {
+      const hasCritical = state.properties.some(p =>
+        (p.activeEvents || []).some(e => e.priority === 'Critical')
+      )
+      return { ...state, activeMilestone: null, isPaused: hasCritical, isModalOpen: hasCritical }
     }
 
     case 'TOGGLE_TRIVIA':

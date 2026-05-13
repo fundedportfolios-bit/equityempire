@@ -14,11 +14,14 @@ import PortfolioRefiModal from './PortfolioRefiModal.jsx'
 import StaffPanel from './StaffPanel.jsx'
 import TriviaModal from './TriviaModal.jsx'
 import WinModal from './WinModal.jsx'
+import MilestoneModal from './MilestoneModal.jsx'
+import ReportModal from './ReportModal.jsx'
 
 export default function Dashboard({ onSave, onExit }) {
   const { state, dispatch } = useGame()
   const [activeModal,  setActiveModal]  = useState(null)
   const [winDismissed, setWinDismissed] = useState(false)
+  const [reportOpen,   setReportOpen]   = useState(false)
 
   useMarketRate(dispatch)
 
@@ -37,6 +40,12 @@ export default function Dashboard({ onSave, onExit }) {
       <header className="dashboard-header">
         <h1 className="game-title">Equity Empire<span className="game-version">v3.1</span></h1>
         <div className="dashboard-header-actions">
+          <button
+            className="btn btn-ghost btn-sm report-btn"
+            onClick={() => { dispatch(setModalOpen(true)); setReportOpen(true) }}
+          >
+            Report
+          </button>
           <button className="btn btn-ghost btn-sm save-btn" onClick={onSave}>
             Save
           </button>
@@ -87,11 +96,15 @@ export default function Dashboard({ onSave, onExit }) {
         <StaffPanel onClose={closeModal} />
       )}
       {state.activeTriviaQuestion && <TriviaModal />}
+      {state.activeMilestone && <MilestoneModal />}
       {state.gameWon && !winDismissed && (
         <WinModal
           onContinue={() => setWinDismissed(true)}
           onExit={onExit}
         />
+      )}
+      {reportOpen && (
+        <ReportModal onClose={() => { dispatch(setModalOpen(false)); setReportOpen(false) }} />
       )}
     </div>
   )

@@ -107,6 +107,10 @@ export function toggleTrivia() {
   return { type: 'TOGGLE_TRIVIA' }
 }
 
+export function dismissMilestone() {
+  return { type: 'DISMISS_MILESTONE' }
+}
+
 // Placeholder — will grow as win/loss conditions are defined
 export function checkWinLoss(state) {
   if (state.cash < 0 && state.monthlyIncome === 0) return 'loss'

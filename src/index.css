@@ -42,6 +42,7 @@ html, body {
 /* ─── Utility classes ─────────────────────────────────────────── */
 .positive { color: var(--positive); }
 .negative { color: var(--negative); }
+.goal-mid { color: #f59e0b; }
 
 /* ─── Buttons ─────────────────────────────────────────────────── */
 .btn {
@@ -1477,12 +1478,15 @@ html, body {
 
 /* ─── Trivia Modal ─────────────────────────────────────────────── */
 .trivia-overlay {
-  align-items: center;   /* center vertically in viewport */
+  justify-content: center;
+  align-items: center;
   cursor: default;
 }
 
 .trivia-sheet {
   max-width: 480px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
 }
 
 .trivia-question {
@@ -1625,15 +1629,36 @@ html, body {
 /* ─── Property Type Bar ────────────────────────────────────────── */
 .property-type-bar {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   margin-top: 14px;
-  padding: 12px 16px;
+  padding: 8px 12px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.07);
   border-radius: var(--radius-sm);
-  justify-content: flex-start;
+}
+
+.ptb-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   align-items: center;
+}
+
+.ptb-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ptb-staff {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
 }
 
 .property-type-chip {
@@ -1641,18 +1666,18 @@ html, body {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  min-width: 44px;
+  min-width: 36px;
 }
 
 .ptc-count {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   line-height: 1;
 }
 
 .ptc-icon {
-  font-size: 1.7rem;
+  font-size: 1.5rem;
   line-height: 1;
 }
 
@@ -2015,3 +2040,121 @@ html, body {
   padding-top: 0.9rem;
   text-transform: capitalize;
 }
+
+/* ─── Report Modal ─────────────────────────────────────────────── */
+.report-overlay { cursor: default; }
+.report-title { font-size: 1.5rem !important; }
+.report-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+.win-modal { position: relative; }
+
+/* ─── Report button in header ──────────────────────────────────── */
+.report-btn { color: var(--text-muted); }
+
+/* ─── Milestone Modal ──────────────────────────────────────────── */
+.milestone-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.milestone-modal {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--mc, #22c55e);
+  border-radius: 20px;
+  padding: 32px 28px 28px;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  overflow: hidden;
+  box-shadow: 0 0 60px color-mix(in srgb, var(--mc, #22c55e) 30%, transparent);
+}
+
+.milestone-glow {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--mc, #22c55e) 25%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+.milestone-emoji {
+  font-size: 3.5rem;
+  line-height: 1;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.milestone-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--mc, #22c55e);
+  margin-bottom: 4px;
+  letter-spacing: -0.02em;
+}
+
+.milestone-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.milestone-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.milestone-stat {
+  background: var(--bg-elevated);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.milestone-stat-val {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.milestone-stat-lbl {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.milestone-btn {
+  background: var(--mc, #22c55e);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 28px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.15s;
+}
+.milestone-btn:hover { opacity: 0.85; }
