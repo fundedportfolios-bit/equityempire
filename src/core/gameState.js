@@ -45,6 +45,10 @@ export const INITIAL_STATE = {
   // Market data
   marketInterestRate: null,
 
+  // Win condition
+  cashFlowGoal: 10000,
+  gameWon: false,
+
   // Meta
   gameStarted: false,
   gameOver: false,
@@ -57,9 +61,10 @@ export function gameReducer(state, action) {
       const settings = DIFFICULTY_SETTINGS[action.payload.difficulty]
       return {
         ...INITIAL_STATE,
-        difficulty: action.payload.difficulty,
-        cash: settings.startingCash,
-        gameStarted: true,
+        difficulty:    action.payload.difficulty,
+        cashFlowGoal:  action.payload.cashFlowGoal || 10000,
+        cash:          settings.startingCash,
+        gameStarted:   true,
         alerts: [
           {
             id: 'welcome',
@@ -151,6 +156,9 @@ export function gameReducer(state, action) {
         }))
       const allAlerts = [monthAlert, ...strActivationAlerts, ...staffAlerts.map(a => ({ ...a, timestamp: newMonth })), ...newAlerts.map(a => ({ ...a, timestamp: a.timestamp ?? newMonth })), ...state.alerts].slice(0, 20)
 
+      const newNetCF  = totals.monthlyIncome - totals.monthlyExpenses - newStaffExpense
+      const justWon   = !state.gameWon && newMonth > 1 && newNetCF >= (state.cashFlowGoal || 10000)
+
       return {
         ...state,
         currentMonth:          newMonth,
@@ -167,6 +175,7 @@ export function gameReducer(state, action) {
         isModalOpen:           shouldTriggerTrivia ? true : state.isModalOpen,
         alerts:                allAlerts,
         isPaused:              shouldPause ? true : state.isPaused,
+        gameWon:               justWon ? true : state.gameWon,
       }
     }
 
@@ -452,8 +461,9 @@ export function gameReducer(state, action) {
         marketInterestRate:    null,
         triviaEnabled:         true,
         ...saved,
-        properties:   migratedProperties,
-        gameStarted:  true,
+        cashFlowGoal:  action.payload.cashFlowGoal ?? saved.cashFlowGoal ?? 10000,
+        properties:    migratedProperties,
+        gameStarted:   true,
       }
     }
 

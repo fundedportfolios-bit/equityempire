@@ -13,7 +13,7 @@ export default function LoginScreen({ onLogin }) {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <h1 className="login-title">Equity Empire</h1>
+        <h1 className="login-title">Equity Empire<span className="game-version">v3.1</span></h1>
         <p className="login-tagline">
           Build a real estate portfolio from the ground up.<br />
           Balance cash flow, debt, equity, and opportunity.

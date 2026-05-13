@@ -30,6 +30,16 @@ export function getAllSlots(userId) {
   return Array.from({ length: SLOT_COUNT }, (_, i) => getSlot(userId, i))
 }
 
+// ─── Per-user settings ─────────────────────────────────────────
+const goalKey = (userId) => `equity_empire_goal_${userId}`
+export function getUserGoal(userId) {
+  try { const v = localStorage.getItem(goalKey(userId)); return v ? parseInt(v, 10) : 10000 }
+  catch { return 10000 }
+}
+export function setUserGoal(userId, goal) {
+  localStorage.setItem(goalKey(userId), String(goal))
+}
+
 // ─── JWT decode (no verification — we trust Google's token) ────
 export function decodeGoogleJwt(token) {
   try {

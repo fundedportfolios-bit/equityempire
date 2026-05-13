@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { googleLogout } from '@react-oauth/google'
-import { getAllSlots, deleteSlot, SLOT_COUNT } from '../auth/saveSlots.js'
+import { getAllSlots, deleteSlot, SLOT_COUNT, getUserGoal, setUserGoal } from '../auth/saveSlots.js'
 import { DIFFICULTY_SETTINGS } from '../data/difficultySettings.js'
 import { formatShort } from '../utils/formatters.js'
 import { formatMonthLabel } from '../core/timeSystem.js'
+
+const GOAL_OPTIONS = [5000, ...Array.from({ length: 23 }, (_, i) => 6000 + i * 2000)]
 
 function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
   const [pickingDifficulty, setPickingDifficulty] = useState(false)
@@ -92,6 +94,13 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
 
 export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   const [slots, setSlots] = useState(() => getAllSlots(user.id))
+  const [goal,  setGoal]  = useState(() => getUserGoal(user.id))
+
+  function handleGoalChange(e) {
+    const val = parseInt(e.target.value, 10)
+    setGoal(val)
+    setUserGoal(user.id, val)
+  }
 
   function handleDelete(i) {
     deleteSlot(user.id, i)
@@ -106,15 +115,30 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   return (
     <div className="slot-screen">
       <div className="slot-screen-header">
-        <h1 className="slot-title">Equity Empire</h1>
-        <div className="slot-user-row">
-          {user.picture && (
-            <img src={user.picture} className="slot-avatar" alt="" referrerPolicy="no-referrer" />
-          )}
-          <span className="slot-user-name">{user.name}</span>
-          <button className="btn btn-ghost btn-sm slot-logout-btn" onClick={handleLogout}>
-            Sign Out
-          </button>
+        <div className="slot-header-top">
+          <h1 className="slot-title">Equity Empire<span className="game-version">v3.1</span></h1>
+          <div className="slot-user-row">
+            {user.picture && (
+              <img src={user.picture} className="slot-avatar" alt="" referrerPolicy="no-referrer" />
+            )}
+            <span className="slot-user-name">{user.name}</span>
+            <button className="btn btn-ghost btn-sm slot-logout-btn" onClick={handleLogout}>
+              Sign Out
+            </button>
+          </div>
+        </div>
+        <div className="slot-goal-row">
+          <label className="slot-goal-label" htmlFor="cash-flow-goal">Monthly Cash Flow Goal</label>
+          <select
+            id="cash-flow-goal"
+            className="slot-goal-select"
+            value={goal}
+            onChange={handleGoalChange}
+          >
+            {GOAL_OPTIONS.map(v => (
+              <option key={v} value={v}>${v.toLocaleString()}/mo</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -126,8 +150,8 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
             key={i}
             slotIndex={i}
             data={data}
-            onNewGame={(difficulty) => onSelectSlot({ slotIndex: i, isNew: true, difficulty })}
-            onContinue={() => onSelectSlot({ slotIndex: i, isNew: false })}
+            onNewGame={(difficulty) => onSelectSlot({ slotIndex: i, isNew: true, difficulty, cashFlowGoal: goal })}
+            onContinue={() => onSelectSlot({ slotIndex: i, isNew: false, cashFlowGoal: goal })}
             onDelete={() => handleDelete(i)}
           />
         ))}

@@ -1,8 +1,8 @@
 
 const SAVE_KEY = 'equity_empire_save'
 
-export function startNewGame(difficulty) {
-  return { type: 'NEW_GAME', payload: { difficulty } }
+export function startNewGame(difficulty, cashFlowGoal = 10000) {
+  return { type: 'NEW_GAME', payload: { difficulty, cashFlowGoal } }
 }
 
 export function advanceMonth() {

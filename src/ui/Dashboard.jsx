@@ -13,10 +13,12 @@ import SellRefiModal from './SellRefiModal.jsx'
 import PortfolioRefiModal from './PortfolioRefiModal.jsx'
 import StaffPanel from './StaffPanel.jsx'
 import TriviaModal from './TriviaModal.jsx'
+import WinModal from './WinModal.jsx'
 
 export default function Dashboard({ onSave, onExit }) {
   const { state, dispatch } = useGame()
-  const [activeModal, setActiveModal] = useState(null)
+  const [activeModal,  setActiveModal]  = useState(null)
+  const [winDismissed, setWinDismissed] = useState(false)
 
   useMarketRate(dispatch)
 
@@ -85,6 +87,12 @@ export default function Dashboard({ onSave, onExit }) {
         <StaffPanel onClose={closeModal} />
       )}
       {state.activeTriviaQuestion && <TriviaModal />}
+      {state.gameWon && !winDismissed && (
+        <WinModal
+          onContinue={() => setWinDismissed(true)}
+          onExit={onExit}
+        />
+      )}
     </div>
   )
 }
