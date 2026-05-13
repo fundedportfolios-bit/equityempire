@@ -493,6 +493,10 @@ html, body {
   display: flex;
   align-items: flex-end;
   gap: 6px;
+  min-width: 0;
+  flex-shrink: 1;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .game-version {
@@ -501,6 +505,12 @@ html, body {
   color: var(--text-muted);
   vertical-align: super;
   margin-left: 4px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 430px) {
+  .game-version { display: none; }
+  .game-title   { font-size: 15px; }
 }
 
 .save-btn { flex-shrink: 0; }
@@ -804,6 +814,7 @@ html, body {
   bottom: 0;
   left: 0;
   right: 0;
+  z-index: 20;
   background: var(--bg-card);
   border-top: 1px solid var(--border);
   padding: 10px 16px;
