@@ -41,25 +41,30 @@ export default function Dashboard({ onSave, onExit }) {
         <h1 className="game-title">Equity Empire<span className="game-version">v4.0</span></h1>
         <div className="dashboard-header-actions">
           <button
-            className="btn btn-ghost btn-sm report-btn"
+            className="hdr-btn"
             onClick={() => { dispatch(setModalOpen(true)); setReportOpen(true) }}
+            aria-label="Report"
+            title="Report"
           >
-            Report
+            <span className="hdr-btn-icon">📋</span>
+            <span className="hdr-btn-text">Report</span>
           </button>
           <button
-            className="btn btn-ghost btn-sm fullscreen-btn"
+            className="hdr-btn"
             onClick={() => document.documentElement.requestFullscreen?.()}
-            title="Fullscreen"
             aria-label="Fullscreen"
+            title="Fullscreen"
           >
-            ⛶
+            <span className="hdr-btn-icon">⛶</span>
           </button>
-          <button className="btn btn-ghost btn-sm save-btn" onClick={onSave}>
-            Save
+          <button className="hdr-btn" onClick={onSave} aria-label="Save" title="Save">
+            <span className="hdr-btn-icon">💾</span>
+            <span className="hdr-btn-text">Save</span>
           </button>
           {onExit && (
-            <button className="btn btn-ghost btn-sm exit-btn" onClick={onExit} title="Save and return to slot selection">
-              ← Exit
+            <button className="hdr-btn" onClick={onExit} aria-label="Exit" title="Save and return to slot selection">
+              <span className="hdr-btn-icon">✕</span>
+              <span className="hdr-btn-text">Exit</span>
             </button>
           )}
         </div>
