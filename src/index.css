@@ -1750,15 +1750,17 @@ html, body {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   border: 2px solid #f59e0b;
   border-radius: 1.25rem;
-  padding: 2.5rem 2rem;
+  padding: 2rem 1.75rem;
   text-align: center;
-  max-width: 500px;
-  width: 92%;
+  max-width: 520px;
+  width: 94%;
+  max-height: 92vh;
+  overflow-y: auto;
   box-shadow: 0 0 60px rgba(245,158,11,0.35), 0 0 120px rgba(245,158,11,0.15);
 }
 .win-confetti-row {
-  font-size: 2rem;
-  margin-bottom: 1rem;
+  font-size: 1.9rem;
+  margin-bottom: 0.75rem;
   animation: winBounce 0.9s ease-in-out infinite alternate;
 }
 @keyframes winBounce {
@@ -1766,58 +1768,62 @@ html, body {
   to   { transform: scale(1.06); }
 }
 .win-title {
-  font-size: 2.4rem;
+  font-size: 2.2rem;
   font-weight: 900;
   background: linear-gradient(90deg, #f59e0b, #fcd34d, #f59e0b);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.35rem;
 }
 .win-subtitle {
   color: #94a3b8;
-  font-size: 1.05rem;
-  margin: 0 0 1.5rem;
+  font-size: 0.95rem;
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
 }
-.win-stats {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+.win-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
 }
 .win-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.15rem;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 0.75rem;
-  padding: 0.7rem 1.1rem;
-  min-width: 120px;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.5rem;
+}
+.win-stat--hl {
+  border-color: rgba(34,197,94,0.4);
+  background: rgba(34,197,94,0.08);
 }
 .win-stat-label {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 .win-stat-value {
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #f1f5f9;
 }
-.win-stat-cf { color: #22c55e; }
-.win-message {
-  color: #cbd5e1;
-  font-size: 0.92rem;
-  line-height: 1.65;
-  margin-bottom: 2rem;
+.win-stat--hl .win-stat-value { color: #22c55e; }
+.win-meta {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-bottom: 1.25rem;
+  text-transform: capitalize;
 }
 .win-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.6rem;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -1825,23 +1831,135 @@ html, body {
   background: linear-gradient(135deg, #22c55e, #16a34a);
   color: #fff;
   border: none;
-  padding: 0.75rem 1.75rem;
+  padding: 0.65rem 1.4rem;
   border-radius: 0.5rem;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
 }
 .win-btn-continue:hover { opacity: 0.88; }
+.win-btn-share {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  border: none;
+  padding: 0.65rem 1.4rem;
+  border-radius: 0.5rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.win-btn-share:hover  { opacity: 0.88; }
+.win-btn-share:disabled { opacity: 0.5; cursor: default; }
 .win-btn-exit {
   background: rgba(255,255,255,0.07);
   color: #94a3b8;
   border: 1px solid rgba(255,255,255,0.14);
-  padding: 0.75rem 1.75rem;
+  padding: 0.65rem 1.4rem;
   border-radius: 0.5rem;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
 }
 .win-btn-exit:hover { background: rgba(255,255,255,0.12); }
+
+/* ─── Win Share Card (off-screen, captured as PNG) ─────────────── */
+.win-share-card {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 640px;
+  background: linear-gradient(135deg, #0f1923 0%, #16213e 55%, #0f3460 100%);
+  border: 3px solid #f59e0b;
+  border-radius: 20px;
+  padding: 2rem 2.25rem 1.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #f1f5f9;
+  box-shadow: 0 0 80px rgba(245,158,11,0.3);
+}
+.wsc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.wsc-logo {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.wsc-badge {
+  background: linear-gradient(90deg, #f59e0b, #fcd34d);
+  color: #0f1923;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.wsc-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  gap: 0.2rem;
+}
+.wsc-cf-label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.wsc-cf {
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: #22c55e;
+  line-height: 1.1;
+}
+.wsc-cf-unit {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #4ade80;
+}
+.wsc-goal-hit {
+  font-size: 0.82rem;
+  color: #86efac;
+}
+.wsc-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.wsc-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 0.7rem 0.5rem;
+}
+.wsc-stat-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.wsc-stat-lbl {
+  font-size: 0.62rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.wsc-footer {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #475569;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 0.9rem;
+  text-transform: capitalize;
+}
