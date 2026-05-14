@@ -39,19 +39,41 @@ export function canFullRefinance(property) {
   return (property.monthsOwned || 0) >= REFI_RULES.maxRefiSeasoningMonths
 }
 
+// Returns the maximum loan principal whose P&I payment ≤ maxMonthlyPayment.
+// This is the inverse of the standard mortgage payment formula.
+function maxLoanFromPayment(maxMonthlyPayment, annualRate, termMonths) {
+  const r = annualRate / 12
+  if (r === 0) return Math.round(maxMonthlyPayment * termMonths)
+  return Math.round(maxMonthlyPayment * ((1 - Math.pow(1 + r, -termMonths)) / r))
+}
+
 // fraction: 0.5 = Low Risk, 1.0 = Max
 // rate: override the refi interest rate (defaults to REFI_RULES.annualInterestRate)
 export function calcRefiOption(property, fraction, rate = REFI_RULES.annualInterestRate) {
-  const maxLoan        = Math.round(property.currentValue * REFI_RULES.maxLTV)
-  const maxGross       = Math.max(0, maxLoan - property.loanBalance)
-  const grossCashOut   = Math.round(maxGross * fraction)
+  // ── LTV-based cap ────────────────────────────────────────────
+  const maxLoanByLTV = Math.round(property.currentValue * REFI_RULES.maxLTV)
+
+  // ── DSCR-based cap (1.25×) ───────────────────────────────────
+  // NOI = rent − non-debt operating expenses − expected cost drag
+  const TARGET_DSCR     = 1.25
+  const monthlyNOI      = (property.monthlyRent || 0)
+    - ((property.monthlyExpenses || 0) - (property.monthlyDebtService || 0))
+    - (property.expectedCostDrag ?? 0)
+  const maxPaymentDSCR  = Math.max(0, monthlyNOI / TARGET_DSCR)
+  const maxLoanByDSCR   = maxLoanFromPayment(maxPaymentDSCR, rate, REFI_RULES.loanTermMonths)
+
+  // Effective max loan is the more conservative of the two caps
+  const maxLoan      = Math.min(maxLoanByLTV, maxLoanByDSCR)
+  const maxGross     = Math.max(0, maxLoan - property.loanBalance)
+  const grossCashOut = Math.round(maxGross * fraction)
+
   const newLoanBalance = property.loanBalance + grossCashOut
   const closingCosts   = Math.round(newLoanBalance * REFI_RULES.closingCostPercent)
   const netCash        = Math.max(0, grossCashOut - closingCosts)
 
   // Only P&I changes on refi; TI + HOA (fixedExpenses) stay the same
-  const newPI          = calculateMortgagePayment(newLoanBalance, rate, REFI_RULES.loanTermMonths)
-  const fixedExpenses  = (property.monthlyExpenses || 0) - (property.monthlyDebtService || 0)
+  const newPI              = calculateMortgagePayment(newLoanBalance, rate, REFI_RULES.loanTermMonths)
+  const fixedExpenses      = (property.monthlyExpenses || 0) - (property.monthlyDebtService || 0)
   const newMonthlyExpenses = Math.round(newPI + fixedExpenses)
 
   const oldCF = (property.monthlyRent || 0) - (property.monthlyExpenses || 0)
@@ -69,6 +91,10 @@ export function calcRefiOption(property, fraction, rate = REFI_RULES.annualInter
     oldCashFlow:   oldCF,
     newCashFlow:   newCF,
     cashFlowDelta: newCF - oldCF,
+    // Diagnostic fields for UI display
+    maxLoanByLTV,
+    maxLoanByDSCR,
+    dscrConstraintActive: maxLoanByDSCR < maxLoanByLTV,
   }
 }
 

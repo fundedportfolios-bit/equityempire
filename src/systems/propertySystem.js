@@ -37,6 +37,22 @@ function isUnlocked(pt, state) {
   }
 }
 
+// ─── Blended valuation config ──────────────────────────────────
+// compWeight:       share of value driven by comparable-sales appreciation
+// incomeWeight:     share of value driven by NOI cap-rate income approach
+// capRate:          expected NOI yield used to estimate income-based value
+// maxMonthlyShift:  max fraction blendedPreUpgradeValue can move in one month
+export const VALUATION_CONFIG = {
+  single_ltr:         { compWeight: 0.85, incomeWeight: 0.15, capRate: 0.0775, maxMonthlyShift: 0.010 },
+  single_str:         { compWeight: 0.70, incomeWeight: 0.30, capRate: 0.0950, maxMonthlyShift: 0.020 },
+  small_multifamily:  { compWeight: 0.60, incomeWeight: 0.40, capRate: 0.0750, maxMonthlyShift: 0.015 },
+  medium_multifamily: { compWeight: 0.35, incomeWeight: 0.65, capRate: 0.0725, maxMonthlyShift: 0.020 },
+  micro_resort:       { compWeight: 0.40, incomeWeight: 0.60, capRate: 0.1000, maxMonthlyShift: 0.025 },
+  apartment_building: { compWeight: 0.20, incomeWeight: 0.80, capRate: 0.0675, maxMonthlyShift: 0.020 },
+  apartment_complex:  { compWeight: 0.10, incomeWeight: 0.90, capRate: 0.0650, maxMonthlyShift: 0.020 },
+  // fix_flip: not listed → pure baseMarketValue appreciation, no income blend
+}
+
 // ─── PITIA/PITIAUC helpers ─────────────────────────────────────
 const DEFAULT_APR      = 0.08   // fallback when no live rate is available
 const PITIA_TERM       = 360    // 30-year fixed
@@ -330,8 +346,11 @@ export function createPropertyInstance(option, currentMonth = null) {
     typicalStrategy: option.typicalStrategy,
     icon: option.icon,
     units: option.units ?? 1,
-    purchasePrice: option.purchasePrice,
-    currentValue: option.purchasePrice,
+    purchasePrice:           option.purchasePrice,
+    currentValue:            option.purchasePrice,
+    baseMarketValue:         option.purchasePrice,
+    totalUpgradeValueBoost:  0,
+    blendedPreUpgradeValue:  option.purchasePrice,
     monthlyRent: option.monthlyIncome,
     monthlyExpenses: option.monthlyExpenses,
     loanBalance: option.loanBalance,
@@ -380,6 +399,63 @@ export function recalculatePortfolioTotals(properties, currentMonth = null) {
     },
     { portfolioValue: 0, totalDebt: 0, monthlyIncome: 0, monthlyExpenses: 0 }
   )
+}
+
+// ─── Blended value computation ─────────────────────────────────
+// Call this whenever a property's income, baseMarketValue, or upgrade
+// boosts change.  Returns { blendedPreUpgradeValue, currentValue }.
+//
+// NOI excludes debt service (P&I). Stored breakdown:
+//   monthlyExpenses = pitiauc = P&I + T&I + HOA + STR_extras
+//   monthlyDebtService = P&I only
+//   → operatingExpenses (non-debt) = monthlyExpenses − monthlyDebtService
+//   → monthlyNOI = monthlyRent − operatingExpenses − expectedCostDrag
+//
+// STR/micro_resort: apply seasoning haircut on effectiveRent before NOI.
+// fix_flip (not in VALUATION_CONFIG): pure baseMarketValue + upgradeBoost.
+export function computeBlendedValue(property) {
+  const config = VALUATION_CONFIG[property.templateId]
+
+  // fix_flip or any unknown type: skip income blend
+  if (!config) {
+    const base  = property.baseMarketValue ?? property.currentValue
+    const boost = property.totalUpgradeValueBoost ?? 0
+    return {
+      blendedPreUpgradeValue: Math.round(base),
+      currentValue:           Math.round(base + boost),
+    }
+  }
+
+  // STR seasoning haircut (prevents one strong month inflating value)
+  const mo     = property.monthsOwned ?? 0
+  const isSTR  = property.templateId === 'single_str' || property.templateId === 'micro_resort'
+  const haircut = isSTR
+    ? (mo >= 12 ? 1.0 : mo >= 7 ? 0.9 : mo >= 4 ? 0.8 : 0.7)
+    : 1.0
+  const effectiveRent = (property.monthlyRent ?? 0) * haircut
+
+  // Monthly NOI (debt service excluded)
+  const monthlyNOI = effectiveRent
+    - ((property.monthlyExpenses ?? 0) - (property.monthlyDebtService ?? 0))
+    - (property.expectedCostDrag ?? 0)
+  const annualNOI  = Math.max(0, monthlyNOI) * 12
+
+  const incomeValue = annualNOI / config.capRate
+  const baseMarket  = property.baseMarketValue ?? property.currentValue
+
+  // Raw blend before smoothing
+  const rawBlended = baseMarket * config.compWeight + incomeValue * config.incomeWeight
+
+  // Monthly shift cap: prevents income noise from spiking value
+  const prevBlended = property.blendedPreUpgradeValue ?? baseMarket
+  const maxShift    = prevBlended * config.maxMonthlyShift
+  const clamped     = Math.max(prevBlended - maxShift, Math.min(prevBlended + maxShift, rawBlended))
+
+  const upgradeBoost = property.totalUpgradeValueBoost ?? 0
+  return {
+    blendedPreUpgradeValue: Math.round(clamped),
+    currentValue:           Math.round(clamped + upgradeBoost),
+  }
 }
 
 // ─── Affordability check ───────────────────────────────────────

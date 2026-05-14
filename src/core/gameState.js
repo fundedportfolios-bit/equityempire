@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useReducer } from 'react'
 import { DIFFICULTY_SETTINGS } from '../data/difficultySettings.js'
 import { calculateNetCashFlow, calculateMortgagePayment } from '../utils/financeMath.js'
-import { createPropertyInstance, recalculatePortfolioTotals } from '../systems/propertySystem.js'
+import { createPropertyInstance, recalculatePortfolioTotals,
+         computeBlendedValue }                               from '../systems/propertySystem.js'
 import { processMonthlyEvents, attachStartupActions } from '../systems/eventSystem.js'
 import { processStaffResolution, calcStaffExpense } from '../systems/staffSystem.js'
 import { selectTriviaQuestion } from '../systems/triviaSystem.js'
@@ -96,9 +97,17 @@ export function gameReducer(state, action) {
         const mo   = updated.monthsOwned
         const name = updated.name
 
-        // Monthly property value appreciation (all types)
-        if (monthlyValRate > 0 && mo > 0) {
-          updated = { ...updated, currentValue: Math.round(updated.currentValue * (1 + monthlyValRate)) }
+        // Monthly property value appreciation → applied to baseMarketValue
+        // Use property-specific appreciationRate if set; fall back to global difficulty rate.
+        // Then blend baseMarketValue with income-based value via computeBlendedValue.
+        if (mo > 0) {
+          const propAppRate = updated.appreciationRate ?? monthlyValRate
+          const newBase = propAppRate > 0
+            ? Math.round((updated.baseMarketValue ?? updated.currentValue) * (1 + propAppRate))
+            : (updated.baseMarketValue ?? updated.currentValue)
+          updated = { ...updated, baseMarketValue: newBase }
+          const { blendedPreUpgradeValue, currentValue: newCV } = computeBlendedValue(updated)
+          updated = { ...updated, blendedPreUpgradeValue, currentValue: newCV }
         }
 
         // Rent appreciation: LTR/Multifamily/Apartment annual; STR/Resort monthly
@@ -243,11 +252,23 @@ export function gameReducer(state, action) {
 
       const updatedProperties = state.properties.map(p => {
         if (p.id !== propertyId) return p
+        // Apply value impact to baseMarketValue (not currentValue directly)
+        // so it feeds into the blended formula instead of bypassing it.
+        const newBase = Math.min(
+          p.purchasePrice * 2,
+          (p.baseMarketValue ?? p.currentValue) + (instance.valueImpact || 0)
+        )
+        const { blendedPreUpgradeValue, currentValue: newCurrentValue } = computeBlendedValue({
+          ...p,
+          baseMarketValue: newBase,
+        })
         return {
           ...p,
-          activeEvents:  (p.activeEvents || []).filter(e => e.instanceId !== instanceId),
-          currentValue:  Math.min(p.purchasePrice * 2, p.currentValue + (instance.valueImpact     || 0)),
-          condition:     Math.min(100,                 (p.condition   ?? 0) + (instance.conditionImpact || 0)),
+          activeEvents:          (p.activeEvents || []).filter(e => e.instanceId !== instanceId),
+          baseMarketValue:       newBase,
+          blendedPreUpgradeValue: blendedPreUpgradeValue,
+          currentValue:          newCurrentValue,
+          condition:             Math.min(100, (p.condition ?? 0) + (instance.conditionImpact || 0)),
         }
       })
       const totals = recalculatePortfolioTotals(updatedProperties, state.currentMonth)
@@ -292,13 +313,20 @@ export function gameReducer(state, action) {
 
       const updatedProperties = state.properties.map(p => {
         if (p.id !== propertyId) return p
-        const newRent  = p.monthlyRent  + (upgradeInstance.permanentRentBoost  || 0)
-        const newValue = p.currentValue + (upgradeInstance.permanentValueBoost || 0)
+        const newRent       = p.monthlyRent + (upgradeInstance.permanentRentBoost || 0)
+        const newTotalBoost = (p.totalUpgradeValueBoost ?? 0) + (upgradeInstance.permanentValueBoost || 0)
+        // Recompute currentValue via blend so upgrade boost is never double-counted
+        const { currentValue: newCurrentValue } = computeBlendedValue({
+          ...p,
+          monthlyRent:            Math.round(newRent),
+          totalUpgradeValueBoost: newTotalBoost,
+        })
         return {
           ...p,
-          monthlyRent:       Math.round(newRent),
-          currentValue:      Math.round(newValue),
-          completedUpgrades: [...(p.completedUpgrades || []), upgradeInstance.sourceId],
+          monthlyRent:            Math.round(newRent),
+          totalUpgradeValueBoost: newTotalBoost,
+          currentValue:           newCurrentValue,
+          completedUpgrades:      [...(p.completedUpgrades || []), upgradeInstance.sourceId],
         }
       })
       const totals = recalculatePortfolioTotals(updatedProperties, state.currentMonth)
@@ -461,15 +489,20 @@ export function gameReducer(state, action) {
         const piPayment = p.loanBalance > 0
           ? calculateMortgagePayment(p.loanBalance, 0.08, 360)
           : 0
-        return {
+        // Merge defaults first so spread can override with saved values
+        const base = {
           activeEvents:           [],
           completedUpgrades:      [],
           activeExpenseIncreases: [],
           monthlyDebtService:     Math.round(piPayment),
           interestRate:           0.08,
           loanTermMonths:         360,
-          ...p,
+          // v4 blended valuation fields — initialize from currentValue for old saves
+          baseMarketValue:        p.currentValue,
+          totalUpgradeValueBoost: 0,
+          blendedPreUpgradeValue: p.currentValue,
         }
+        return { ...base, ...p }
       })
       return {
         ...INITIAL_STATE,
