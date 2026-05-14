@@ -30,7 +30,7 @@ function UpgradeRow({ upgrade, playerCash, onInstall }) {
       <div className="upgrade-row-info">
         <span className="upgrade-row-name">{template.upgradeName}</span>
         <span className="upgrade-row-meta">
-          <span className="upgrade-row-prop"><PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name}</span>
+          <span className="upgrade-row-prop"><PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} inline /> {property.name}</span>
           <span className="badge badge-upgrade">{template.upgradeCategory}</span>
           {permanentRentBoost > 0
             ? <span className="upgrade-row-roi">+{formatCurrency(permanentRentBoost)}/mo &middot; {roi.toFixed(1)}% ROI</span>

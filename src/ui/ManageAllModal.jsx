@@ -132,7 +132,7 @@ function PropertySection({ property, playerCash, dispatch }) {
   return (
     <section className="manage-all-prop-section">
       <h3 className="manage-all-prop-header">
-        <span><PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name}</span>
+        <span><PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} inline /> {property.name}</span>
         {activeIssues.length > 0 && (
           <span className="manage-all-issue-count">{activeIssues.length} issue{activeIssues.length !== 1 ? 's' : ''}</span>
         )}

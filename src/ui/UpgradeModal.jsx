@@ -86,7 +86,7 @@ export default function UpgradeModal({ propertyId, onClose }) {
         <div className="modal-header">
           <div>
             <h2 className="modal-title">
-              <PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name} — Upgrades
+              <PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} inline /> {property.name} — Upgrades
             </h2>
             <p className="modal-subtitle">Cash: <strong>{formatShort(state.cash)}</strong> · Sorted by ROI</p>
           </div>

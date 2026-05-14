@@ -166,7 +166,7 @@ export default function SellRefiModal({ propertyId, onClose }) {
         <div className="modal-header">
           <div>
             <h2 className="modal-title">
-              <PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name}
+              <PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} inline /> {property.name}
             </h2>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>

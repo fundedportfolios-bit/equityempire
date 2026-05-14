@@ -18,7 +18,7 @@ function PropertyTypeBar({ properties, staffCount }) {
   // image path from the first matching property in each group.
   const groups = properties.reduce((acc, p) => {
     const key = p.templateId || p.icon || 'unknown'
-    if (!acc[key]) acc[key] = { count: 0, emoji: p.icon || '🏠', image: p.iconImage }
+    if (!acc[key]) acc[key] = { count: 0, emoji: p.icon || '🏠', image: p.iconImage, templateId: p.templateId }
     acc[key].count++
     return acc
   }, {})
@@ -27,10 +27,10 @@ function PropertyTypeBar({ properties, staffCount }) {
   return (
     <div className="property-type-bar">
       <div className="ptb-icons">
-        {entries.map(([key, { count, emoji, image }]) => (
+        {entries.map(([key, { count, emoji, image, templateId }]) => (
           <div key={key} className="property-type-chip">
             <span className="ptc-count">{count}</span>
-            <PropertyIcon emoji={emoji} image={image} className="ptc-icon" />
+            <PropertyIcon emoji={emoji} image={image} templateId={templateId} className="ptc-icon" />
           </div>
         ))}
         {entries.length === 0 && <span className="ptb-empty">No properties yet</span>}

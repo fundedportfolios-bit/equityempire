@@ -21,7 +21,7 @@ function RefiPropertyCard({ property, state, onSelect }) {
   return (
     <div className={`refi-picker-card${canRefi ? '' : ' refi-picker-card--ineligible'}`}>
       <div className="refi-picker-card-header">
-        <PropertyIcon emoji={property.icon} image={property.iconImage} className="refi-picker-icon" />
+        <PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} className="refi-picker-icon" />
         <div className="refi-picker-name">
           <div className="refi-picker-prop-name">{property.name}</div>
           <div className="refi-picker-mo-owned">{property.monthsOwned || 0} months owned</div>
