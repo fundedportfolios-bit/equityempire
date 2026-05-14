@@ -30,6 +30,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'cash flow',
     description: 'A simple rental home with steady income, lower upside, and predictable management.',
     icon: '🏠',
+    iconImage: '/icons/single-ltr.png',
   },
   {
     id: 'single_str',
@@ -64,6 +65,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'high cash flow',
     description: 'A higher-income rental with more volatility, guest issues, cleaning needs, and stronger upside.',
     icon: '🏡',
+    iconImage: '/icons/single-str.png',
   },
   {
     id: 'small_multifamily',
@@ -127,6 +129,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'income scaling',
     description: 'An 8–16 unit building that bridges small residential and commercial-scale ownership. More income stability than a 4-plex, more manageable than a full apartment complex.',
     icon: '🏬',
+    iconImage: '/icons/medium-multifamily.png',
   },
   {
     id: 'fix_flip',
@@ -226,6 +229,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'income scaling',
     description: 'A larger rental asset where income, expenses, financing, and management become more professionalized.',
     icon: '🏢',
+    iconImage: '/icons/apartment-building.png',
   },
   {
     id: 'apartment_complex',
