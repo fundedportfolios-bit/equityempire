@@ -1121,8 +1121,9 @@ body {
   .action-badge { display: none; }
 }
 
-/* Staff icon light blue (same filter recipe as .ptb-staff) */
-.action-btn--staff .action-icon {
+/* Staff icon light blue — applied only to emoji <span>, not <img>, so the
+   cartoony PNG (when present) shows in full color. */
+.action-btn--staff span.action-icon {
   filter: brightness(0) saturate(100%) invert(72%) sepia(31%) saturate(2056%)
           hue-rotate(176deg) brightness(99%) contrast(91%);
 }
@@ -1917,8 +1918,9 @@ body {
 }
 /* Colorize the 👤 emoji silhouette → light blue (#38bdf8). The filter chain
    converts any source color to a specific hex by zeroing brightness first
-   then layering invert/sepia/hue-rotate to land on the target. */
-.ptb-staff .ptc-icon  {
+   then layering invert/sepia/hue-rotate to land on the target. Only applied
+   to the emoji <span>, NOT to an <img> (so PNG icons retain their colors). */
+.ptb-staff span.ptc-icon  {
   filter: brightness(0) saturate(100%) invert(72%) sepia(31%) saturate(2056%)
           hue-rotate(176deg) brightness(99%) contrast(91%);
 }
@@ -1943,6 +1945,31 @@ body {
   font-size: 1.5rem;
   line-height: 1;
 }
+
+/* ─── Image-based property icons ───────────────────────────────── */
+/* The wrapper element (e.g. .ptc-icon, .option-icon) keeps its layout
+   class; the <img> child sizes itself to the wrapper's font-size. */
+.prop-icon-img {
+  display: block;
+  width: 1.5em;
+  height: 1.5em;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.prop-icon-img--inline {
+  display: inline-block;
+  vertical-align: -0.25em;
+  margin-right: 0.25em;
+  width: 1.2em;
+  height: 1.2em;
+}
+/* When the wrapper already sets font-size (e.g. .ptc-icon at 1.5rem),
+   the img inherits via em units, so we re-tune to fill the wrapper. */
+.ptc-icon.prop-icon-img,
+.option-icon.prop-icon-img,
+.refi-picker-icon.prop-icon-img,
+.action-icon.prop-icon-img { width: 1.4em; height: 1.4em; }
 
 /* ─── STR Investment Note ──────────────────────────────────────── */
 .option-str-note {

@@ -3,6 +3,7 @@ import { useGame } from '../core/gameState.js'
 import { buyProperty } from '../core/gameEngine.js'
 import { generatePropertyOptions, canAffordOption } from '../systems/propertySystem.js'
 import { formatCurrency, formatShort, formatCashFlow } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 const RISK_COLORS = { low: 'risk-low', medium: 'risk-medium', high: 'risk-high' }
 const TIER_LABELS  = { early: 'Early Game', mid: 'Mid Game', late: 'Late Game' }
@@ -18,7 +19,7 @@ function PropertyOption({ option, playerCash, onBuy }) {
       )}
       <div className="option-header">
         <div className="option-header-left">
-          <span className="option-icon">{option.icon}</span>
+          <PropertyIcon emoji={option.icon} image={option.iconImage} className="option-icon" />
           <div>
             <div className="option-type">{option.propertyType}</div>
             <div className="option-badges">

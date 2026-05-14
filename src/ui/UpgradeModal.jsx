@@ -3,6 +3,7 @@ import { useGame } from '../core/gameState.js'
 import { installUpgrade } from '../core/gameEngine.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 function buildUpgradeList(property) {
   const available = getAvailableUpgrades(property)
@@ -84,7 +85,9 @@ export default function UpgradeModal({ propertyId, onClose }) {
       <div className="modal-sheet">
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">{property.icon} {property.name} — Upgrades</h2>
+            <h2 className="modal-title">
+              <PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name} — Upgrades
+            </h2>
             <p className="modal-subtitle">Cash: <strong>{formatShort(state.cash)}</strong> · Sorted by ROI</p>
           </div>
           <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>

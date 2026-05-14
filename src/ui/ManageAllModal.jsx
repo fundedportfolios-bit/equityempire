@@ -3,6 +3,7 @@ import { useGame } from '../core/gameState.js'
 import { resolveEvent, installUpgrade } from '../core/gameEngine.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 const PRIORITY_CLASS = {
   Critical: 'badge-priority-critical',
@@ -131,7 +132,7 @@ function PropertySection({ property, playerCash, dispatch }) {
   return (
     <section className="manage-all-prop-section">
       <h3 className="manage-all-prop-header">
-        <span>{property.icon} {property.name}</span>
+        <span><PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name}</span>
         {activeIssues.length > 0 && (
           <span className="manage-all-issue-count">{activeIssues.length} issue{activeIssues.length !== 1 ? 's' : ''}</span>
         )}

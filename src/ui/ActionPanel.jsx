@@ -7,12 +7,13 @@ import { getMaxRefiNetCash } from '../systems/loanSystem.js'
 import { calcCurrentStaffCost } from '../systems/staffSystem.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatShort } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 const ACTIONS = [
   { id: 'invest',    label: 'Invest',    icon: '🏠' },
   { id: 'upgrade',   label: 'Upgrade',   icon: '🔧' },
   { id: 'refinance', label: 'Refinance', icon: '💰' },
-  { id: 'staff',     label: 'Staff',     icon: '👤' },
+  { id: 'staff',     label: 'Staff',     icon: '👤', iconImage: '/icons/staff.png' },
   { id: 'trivia',    label: 'Trivia',    icon: '🎓', isToggle: true },
 ]
 
@@ -219,7 +220,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
                   onClick={onTriviaToggle}
                   title={on ? 'Knowledge Power-Up: ON — click to disable' : 'Knowledge Power-Up: OFF — click to enable'}
                 >
-                  <span className="action-icon">{action.icon}</span>
+                  <PropertyIcon emoji={action.icon} image={action.iconImage} className="action-icon" />
                   <span className="action-label">{action.label}</span>
                   <span className="action-toggle-badge">{on ? 'ON' : 'OFF'}</span>
                 </button>
@@ -233,7 +234,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
                 disabled={action.id !== 'staff' && meta.disabled}
                 onClick={() => handlers[action.id]?.()}
               >
-                <span className="action-icon">{action.icon}</span>
+                <PropertyIcon emoji={action.icon} image={action.iconImage} className="action-icon" />
                 <span className="action-label">{action.label}</span>
                 {meta.badges.map(b => (
                   <span key={b} className="action-badge">{b}</span>

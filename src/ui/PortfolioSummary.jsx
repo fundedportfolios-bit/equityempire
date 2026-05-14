@@ -2,6 +2,7 @@ import { useGame } from '../core/gameState.js'
 import { DIFFICULTY_SETTINGS } from '../data/difficultySettings.js'
 import { calculateEquity, calculateNetCashFlow } from '../utils/financeMath.js'
 import { formatShort, formatCashFlow } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 function StatCard({ label, value, valueClass = '' }) {
   return (
@@ -13,9 +14,12 @@ function StatCard({ label, value, valueClass = '' }) {
 }
 
 function PropertyTypeBar({ properties, staffCount }) {
+  // Group properties by templateId so we can pull both the emoji and the
+  // image path from the first matching property in each group.
   const groups = properties.reduce((acc, p) => {
-    const key = p.icon || '🏠'
-    acc[key] = (acc[key] || 0) + 1
+    const key = p.templateId || p.icon || 'unknown'
+    if (!acc[key]) acc[key] = { count: 0, emoji: p.icon || '🏠', image: p.iconImage }
+    acc[key].count++
     return acc
   }, {})
   const entries = Object.entries(groups)
@@ -23,16 +27,16 @@ function PropertyTypeBar({ properties, staffCount }) {
   return (
     <div className="property-type-bar">
       <div className="ptb-icons">
-        {entries.map(([icon, count]) => (
-          <div key={icon} className="property-type-chip">
+        {entries.map(([key, { count, emoji, image }]) => (
+          <div key={key} className="property-type-chip">
             <span className="ptc-count">{count}</span>
-            <span className="ptc-icon">{icon}</span>
+            <PropertyIcon emoji={emoji} image={image} className="ptc-icon" />
           </div>
         ))}
         {entries.length === 0 && <span className="ptb-empty">No properties yet</span>}
       </div>
       <div className="ptb-staff">
-        <span className="ptc-icon">👤</span>
+        <PropertyIcon emoji="👤" image="/icons/staff.png" className="ptc-icon" />
         <span className="ptc-count">{staffCount}</span>
       </div>
     </div>

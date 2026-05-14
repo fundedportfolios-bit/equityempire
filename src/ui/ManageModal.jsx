@@ -3,6 +3,7 @@ import { useGame } from '../core/gameState.js'
 import { resolveEvent, installUpgrade } from '../core/gameEngine.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 const PRIORITY_CLASS = {
   Critical: 'badge-priority-critical',
@@ -193,7 +194,7 @@ export default function ManageModal({ propertyId, onClose }) {
         <div className="modal-header">
           <div>
             <h2 className="modal-title">
-              {property.icon} {property.name}
+              <PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name}
             </h2>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>

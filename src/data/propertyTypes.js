@@ -95,6 +95,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'scaling cash flow',
     description: 'Multiple units create stronger income stability because one vacancy does not stop all revenue.',
     icon: '🏘',
+    iconImage: '/icons/small-multifamily.png',
   },
   {
     id: 'medium_multifamily',
@@ -158,6 +159,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'forced appreciation',
     description: 'A project asset with no monthly income, higher risk, and potential profit through renovation and resale or refinance.',
     icon: '🔨',
+    iconImage: '/icons/fix-flip.png',
   },
   {
     id: 'micro_resort',
@@ -192,6 +194,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'operational upside',
     description: 'A high-powered hospitality asset with multiple units, strong revenue potential, and serious management complexity.',
     icon: '🏖',
+    iconImage: '/icons/micro-resort.png',
   },
   {
     id: 'apartment_building',
@@ -254,6 +257,7 @@ export const PROPERTY_TYPES = [
     typicalStrategy: 'portfolio transformation',
     description: 'A major late-game asset requiring significant capital, stronger systems, and professional management.',
     icon: '🏙',
+    iconImage: '/icons/apartment-complex.png',
   },
 ]
 

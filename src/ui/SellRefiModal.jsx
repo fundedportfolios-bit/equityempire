@@ -2,6 +2,7 @@ import { useGame } from '../core/gameState.js'
 import { sellProperty, refinanceProperty } from '../core/gameEngine.js'
 import { calculateRefinanceOptions, calcSaleProceeds, getMaxRefiNetCash } from '../systems/loanSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 function DeltaValue({ value }) {
   if (value === 0) return <span className="cash-flow-delta neutral">No change</span>
@@ -165,7 +166,7 @@ export default function SellRefiModal({ propertyId, onClose }) {
         <div className="modal-header">
           <div>
             <h2 className="modal-title">
-              {property.icon} {property.name}
+              <PropertyIcon emoji={property.icon} image={property.iconImage} inline /> {property.name}
             </h2>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>
