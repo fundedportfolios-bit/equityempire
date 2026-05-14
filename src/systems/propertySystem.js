@@ -24,6 +24,8 @@ function isUnlocked(pt, state) {
       return true
     case 'single_str':
       return owned >= 1 || cash >= 25000
+    case 'medium_multifamily':
+      return portfolioValue >= 750000
     case 'small_multifamily':
     case 'fix_flip':
     case 'micro_resort':
@@ -47,6 +49,18 @@ function calcPITIA(purchasePrice, loanBalance, hoa, apr = DEFAULT_APR) {
 }
 
 // ─── Option generation ─────────────────────────────────────────
+// Income model (v5):
+//   gross monthlyIncome = PITIAUC + expectedCostDrag + adjustedTargetCashFlow
+//
+// where:
+//   adjustedTargetCashFlow = (ownerCashFlowTargetPerUnit[difficulty] × units / 12)
+//                            × deal.cashFlowMultiplier × yieldBoost
+//   expectedCostDrag       = (costDragPerUnitMonthly[difficulty] × units)
+//                            × deal.expenseMultiplier
+//
+// The player sees gross income and PITIAUC as monthly expenses. Their visible
+// Net CF looks high; in practice the event system drains ~expectedCostDrag/mo,
+// landing actual long-run owner CF near adjustedTargetCashFlow.
 function generateOption(template, difficulty, apr = DEFAULT_APR, modifierOpts = {}) {
   // Hot deals target the lower third of the price range
   const priceMax = modifierOpts.forceLowPrice
@@ -69,23 +83,48 @@ function generateOption(template, difficulty, apr = DEFAULT_APR, modifierOpts = 
   const pitia   = calcPITIA(purchasePrice, loanBalance, template.hoaMonthly, apr)
   const pitiauc = pitia + addlExp   // for non-STR: addlExp = 0, pitiauc === pitia
 
-  let monthlyIncome = 0
-  const yieldTable = template.netYieldByDifficulty
-  const yieldBoost = modifierOpts.yieldBoost || 1
-  if (yieldTable && difficulty && yieldTable[difficulty] != null) {
-    const netCFPerMonth = Math.round(pitiauc * (yieldTable[difficulty] / 100) * yieldBoost)
-    monthlyIncome = Math.round((pitiauc + netCFPerMonth) / 25) * 25
-  } else if (template.incomeMultiplier > 0) {
-    monthlyIncome = Math.round((pitiauc * template.incomeMultiplier) / 25) * 25
+  const yieldBoost      = modifierOpts.yieldBoost || 1
+  const isIncomeType    = template.incomeType !== 'none'
+  const units           = template.units || 1
+
+  let monthlyIncome           = 0
+  let projectedOwnerCashFlow  = 0
+  let expectedCostDrag        = 0
+  let adjustedTargetCF        = 0
+
+  if (isIncomeType) {
+    // Per-unit owner CF target (annual $) → monthly target before deal mods
+    const targets             = template.ownerCashFlowTargetPerUnit || {}
+    const targetPerUnit       = targets[difficulty] ?? targets.medium ?? 2400
+    const baseMonthlyTargetCF = (targetPerUnit * units) / 12
+
+    // Expected monthly cost drag — represents long-run event + maintenance burn.
+    // The event system still fires; this number is the buffer baked into income.
+    const dragPerUnit       = (template.costDragPerUnitMonthly || {})[difficulty] ?? 50
+    const baseCostDrag      = dragPerUnit * units
+    expectedCostDrag        = Math.round(baseCostDrag * deal.expenseMultiplier)
+
+    // Condition and archetype modifiers apply ONLY to the target CF component.
+    adjustedTargetCF = Math.round(baseMonthlyTargetCF * deal.cashFlowMultiplier * yieldBoost)
+
+    // Floor: gross income must at least cover PITIAUC (1.0× — never less than break-even
+    // on the fixed costs). Below that we'd be selling a property no one would rent.
+    const grossUncapped = pitiauc + expectedCostDrag + adjustedTargetCF
+    const grossFloor    = Math.round(pitiauc * 1.0)
+    const grossRaw      = Math.max(grossUncapped, grossFloor)
+    monthlyIncome       = Math.round(grossRaw / 25) * 25
+
+    // Projected owner CF = what we display in the invest card after drag is paid.
+    // Recompute from rounded income so display stays consistent with stored value.
+    projectedOwnerCashFlow = monthlyIncome - Math.round(pitiauc) - expectedCostDrag
   }
 
-  // Apply deal income multiplier (floor 0 — distressed deals may have zero income)
-  monthlyIncome = monthlyIncome === 0 ? 0 : Math.round((monthlyIncome * deal.incomeMultiplier) / 25) * 25
-
-  // Expenses: apply deal expense multiplier to both paths
-  const monthlyExpenses = monthlyIncome === 0
+  // Visible monthly expenses
+  //   - Income-producing: just PITIAUC (the actual fixed bill)
+  //   - Non-income (fix-flip): holding costs as % of price, with expenseMultiplier
+  const monthlyExpenses = !isIncomeType
     ? Math.round((purchasePrice * (template.monthlyExpensePercent / 100)) / 12 * deal.expenseMultiplier)
-    : Math.round(pitiauc * deal.expenseMultiplier)
+    : Math.round(pitiauc)
 
   const netCashFlow = monthlyIncome - monthlyExpenses
 
@@ -123,6 +162,9 @@ function generateOption(template, difficulty, apr = DEFAULT_APR, modifierOpts = 
     monthlyIncome,
     monthlyExpenses,
     netCashFlow,
+    pitiauc:                  Math.round(pitiauc),
+    expectedCostDrag,
+    projectedOwnerCashFlow,
     downPayment,
     closingCosts,
     setupCost,
@@ -137,6 +179,7 @@ function generateOption(template, difficulty, apr = DEFAULT_APR, modifierOpts = 
     dealArchetypeId:           deal.dealArchetypeId,
     dealArchetypeLabel:        deal.dealArchetypeLabel,
     dealDescription:           deal.dealDescription,
+    upgradePotential:          deal.upgradePotential,
     conditionId:               deal.conditionId,
     conditionLabel:            deal.conditionLabel,
     conditionScore:            deal.conditionScore,
@@ -145,97 +188,86 @@ function generateOption(template, difficulty, apr = DEFAULT_APR, modifierOpts = 
   }
 }
 
-// Retry wrapper — returns first option under maxCashNeeded (and positive CF when required).
-// Fallback priority: cheapest positive-CF option > cheapest any option.
-function generateAffordableOption(template, difficulty, apr, maxCashNeeded, modifierOpts = {}) {
-  const needsPositiveCF = modifierOpts.requirePositiveCashFlow === true
-  let cheapest = null
-  let cheapestPositiveCF = null
-  for (let i = 0; i < 10; i++) {
-    const opt = generateOption(template, difficulty, apr, modifierOpts)
-    const cfOk = !needsPositiveCF || opt.netCashFlow > 0
-    if (opt.cashNeeded <= maxCashNeeded && cfOk) return opt
-    if (opt.netCashFlow > 0 && (!cheapestPositiveCF || opt.cashNeeded < cheapestPositiveCF.cashNeeded)) {
-      cheapestPositiveCF = opt
-    }
-    if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
-  }
-  return cheapestPositiveCF ?? cheapest
+// Projected owner CF positivity check — non-income properties don't have a
+// target CF (judged on appreciation instead).
+function isProjectedPositive(opt) {
+  if (opt.monthlyIncome === 0) return true
+  return (opt.projectedOwnerCashFlow ?? 0) > 0
 }
 
-// Hot deal: lower price range, good/excellent condition, 50% yield boost, positive CF required.
-function generateHotDeal(template, difficulty, apr, maxCashNeeded) {
-  const opts = {
-    allowedConditionIds: ['good', 'excellent'],
-    excludeArchetypeIds: ['overpriced'],
-    forceLowPrice: true,
-    yieldBoost: 1.5,
-    requirePositiveCashFlow: true,
-  }
-  let cheapest = null
-  for (let i = 0; i < 12; i++) {
-    const opt = generateOption(template, difficulty, apr, opts)
-    if (opt.cashNeeded <= maxCashNeeded && opt.netCashFlow > 0) return { ...opt, isHotDeal: true }
-    if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
-  }
-  return { ...cheapest, isHotDeal: true }
-}
-
-// Slot spec based on how much cash the player has.
-// Each slot specifies which property type to offer and the cash budget cap.
+// Slot plan: portfolio-value tiers determine which property TYPES each slot
+// should try, in order of preference. Every slot must produce an option whose
+// cashNeeded ≤ state.cash (the picker retries with different price rolls,
+// falling back through the type list).
 function buildSlots(state) {
-  const cash = state.cash
+  const pv = state.portfolioValue || 0
 
   // Game start: player has no properties — 3 affordable LTRs, good condition, positive CF
   if (state.properties.length === 0) {
     const opts = { allowedConditionIds: ['good', 'excellent'], requirePositiveCashFlow: true }
     return [
-      { typeId: 'single_ltr', maxCashNeeded: 50000, modifierOpts: opts },
-      { typeId: 'single_ltr', maxCashNeeded: 50000, modifierOpts: opts },
-      { typeId: 'single_ltr', maxCashNeeded: 50000, modifierOpts: opts },
+      { types: ['single_ltr'], modifierOpts: opts },
+      { types: ['single_ltr'], modifierOpts: opts },
+      { types: ['single_ltr'], modifierOpts: opts },
     ]
   }
 
-  if (cash >= 200000) {
+  // Portfolio < $1M: 1 LTR + 1 STR + (LTR or STR)
+  if (pv < 1_000_000) {
     return [
-      { typeId: 'single_ltr',        maxCashNeeded: Math.floor(cash * 0.55) },
-      { typeId: 'single_str',        maxCashNeeded: Math.floor(cash * 0.75) },
-      { typeId: 'small_multifamily', maxCashNeeded: Math.floor(cash * 0.95) },
+      { types: ['single_ltr'] },
+      { types: ['single_str', 'single_ltr'] },
+      { types: ['single_str', 'single_ltr'] },
     ]
   }
-  if (cash >= 100000) {
+
+  // $1M ≤ pv < $2M: at least 1 small multifamily, others LTR/STR/medium MF
+  if (pv < 2_000_000) {
     return [
-      { typeId: 'single_ltr',        maxCashNeeded: Math.floor(cash * 0.60) },
-      { typeId: 'single_str',        maxCashNeeded: Math.floor(cash * 0.80) },
-      { typeId: 'small_multifamily', maxCashNeeded: Math.floor(cash * 0.95) },
+      { types: ['small_multifamily'] },
+      { types: ['single_ltr', 'single_str', 'medium_multifamily'] },
+      { types: ['single_str', 'medium_multifamily', 'single_ltr'] },
     ]
   }
-  if (cash >= 60000) {
-    return [
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.65) },
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.85) },
-      { typeId: 'single_str', maxCashNeeded: Math.floor(cash * 0.95) },
-    ]
-  }
-  if (cash >= 50000) {
-    return [
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.60) },
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.80) },
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.95) },
-    ]
-  }
-  if (cash >= 40000) {
-    return [
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.70) },
-      { typeId: 'single_ltr', maxCashNeeded: Math.floor(cash * 0.95) },
-      { typeId: 'single_ltr', maxCashNeeded: cash },
-    ]
-  }
+
+  // pv ≥ $2M: 1 LTR or STR + 2 from apartments/resorts
   return [
-    { typeId: 'single_ltr', maxCashNeeded: cash },
-    { typeId: 'single_ltr', maxCashNeeded: cash },
-    { typeId: 'single_ltr', maxCashNeeded: cash },
+    { types: ['single_ltr', 'single_str'] },
+    { types: ['micro_resort', 'apartment_building', 'apartment_complex'] },
+    { types: ['apartment_building', 'apartment_complex', 'micro_resort'] },
   ]
+}
+
+// For a single slot: walk through the requested types, generate options of
+// each, return the first affordable one. If none are affordable across all
+// attempts, fall back to a single LTR (always unlocked). Last resort: cheapest
+// option we found during the retries.
+function pickOptionForSlot(slot, state, apr) {
+  const cash    = state.cash || 0
+  const modOpts = slot.modifierOpts || {}
+  let cheapest  = null
+
+  for (const typeId of slot.types) {
+    const template = PROPERTY_TYPES.find(pt => pt.id === typeId && isUnlocked(pt, state))
+    if (!template) continue
+    for (let i = 0; i < 8; i++) {
+      const opt = generateOption(template, state.difficulty, apr, modOpts)
+      if (opt.cashNeeded <= cash) return opt
+      if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
+    }
+  }
+
+  // Fallback: cheapest affordable LTR
+  const ltr = PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
+  if (ltr) {
+    for (let i = 0; i < 6; i++) {
+      const opt = generateOption(ltr, state.difficulty, apr, modOpts)
+      if (opt.cashNeeded <= cash) return opt
+      if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
+    }
+  }
+
+  return cheapest
 }
 
 export function generatePropertyOptions(state) {
@@ -246,21 +278,42 @@ export function generatePropertyOptions(state) {
   const slots   = buildSlots(state)
   const options = []
 
-  // Hot deal prepended when triggered (every 6th open)
+  // Hot deal prepended when triggered — only included if we can find one
+  // that is BOTH affordable AND meets the hot deal positive-CF requirement.
   if (isHotDeal) {
     const ltr = PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
-    if (ltr) options.push(generateHotDeal(ltr, state.difficulty, apr, state.cash * 0.85))
+    if (ltr) {
+      const hot = findAffordableHotDeal(ltr, state.difficulty, apr, state.cash)
+      if (hot) options.push(hot)
+    }
   }
 
   for (const slot of slots) {
-    const template = PROPERTY_TYPES.find(pt => pt.id === slot.typeId && isUnlocked(pt, state))
-      ?? PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
-    options.push(generateAffordableOption(
-      template, state.difficulty, apr, slot.maxCashNeeded, slot.modifierOpts ?? {}
-    ))
+    const opt = pickOptionForSlot(slot, state, apr)
+    if (opt) options.push(opt)
   }
 
   return options.filter(Boolean)
+}
+
+// Try up to 18 generations to find a hot deal that is affordable AND has a
+// positive projected owner CF. Returns null if none can be found — caller
+// should then NOT prepend a hot deal at all.
+function findAffordableHotDeal(template, difficulty, apr, cash) {
+  const opts = {
+    allowedConditionIds: ['good', 'excellent'],
+    excludeArchetypeIds: ['overpriced'],
+    forceLowPrice: true,
+    yieldBoost: 1.5,
+    requirePositiveCashFlow: true,
+  }
+  for (let i = 0; i < 18; i++) {
+    const opt = generateOption(template, difficulty, apr, opts)
+    if (opt.cashNeeded <= cash && isProjectedPositive(opt)) {
+      return { ...opt, isHotDeal: true }
+    }
+  }
+  return null
 }
 
 // ─── Instance creation ─────────────────────────────────────────
@@ -293,9 +346,13 @@ export function createPropertyInstance(option, currentMonth = null) {
     activeExpenseIncreases: [],
     revenueStartMonth: (isSTR && currentMonth != null) ? currentMonth + 2 : null,
     immediateRepairCost:       option.immediateRepairCost       ?? 0,
+    pitiauc:                   option.pitiauc                   ?? 0,
+    expectedCostDrag:          option.expectedCostDrag          ?? 0,
+    projectedOwnerCashFlow:    option.projectedOwnerCashFlow    ?? 0,
     dealArchetypeId:           option.dealArchetypeId,
     dealArchetypeLabel:        option.dealArchetypeLabel,
     dealDescription:           option.dealDescription,
+    upgradePotential:          option.upgradePotential,
     conditionId:               option.conditionId,
     conditionLabel:            option.conditionLabel,
     conditionScore:            option.conditionScore,
@@ -329,6 +386,9 @@ export function recalculatePortfolioTotals(properties, currentMonth = null) {
 export function canAffordOption(state, option) {
   return state.cash >= option.cashNeeded
 }
+
+// Debug-only export — used by src/debug/incomeCalibration.js
+export const _debug_generateOption = generateOption
 
 // Count how many unlocked property types are affordable at minimum purchase price.
 // Used for the Invest button badge — avoids running the random generator.

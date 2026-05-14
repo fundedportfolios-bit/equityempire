@@ -1,33 +1,93 @@
-import { useState, useEffect } from 'react'
-import { GoogleOAuthProvider } from '@react-oauth/google'
-import { GameProvider, useGame } from './core/gameState.js'
-import { startNewGame } from './core/gameEngine.js'
-import { getStoredUser, storeUser, clearStoredUser, getSlot, setSlot } from './auth/saveSlots.js'
-import LoginScreen from './ui/LoginScreen.jsx'
-import SlotScreen from './ui/SlotScreen.jsx'
-import Dashboard from './ui/Dashboard.jsx'
+import { useState, useEffect, useRef }                  from 'react'
+import { GameProvider, useGame }                         from './core/gameState.js'
+import { startNewGame }                                  from './core/gameEngine.js'
+import { getStoredUser, storeUser, clearStoredUser,
+         getSlot, setSlot }                              from './auth/saveSlots.js'
+import { loadSlotFromFirestore, saveSlotToFirestore }    from './firebase/firestoreService.js'
+import LoginScreen                                       from './ui/LoginScreen.jsx'
+import SlotScreen                                        from './ui/SlotScreen.jsx'
+import Dashboard                                         from './ui/Dashboard.jsx'
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+const isCloudUser = (user) => user?.id && user.id !== 'guest'
 
-// Sits inside GameProvider — loads or starts the game then renders Dashboard
+// ─── GameInSlot ────────────────────────────────────────────────────────────
+// Loads or starts a game then renders Dashboard.
+// Auto-saves to Firestore after every month advance and property purchase
+// (for signed-in users). Guest saves remain localStorage-only.
+
 function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }) {
   const { state, dispatch } = useGame()
-  const [ready, setReady] = useState(false)
+  const [ready, setReady]   = useState(false)
+  const cloud               = isCloudUser(user)
 
+  // Auto-save refs
+  const autoSaveTimerRef  = useRef(null)
+  const hasInitializedRef = useRef(false)   // skip the first trigger on mount
+
+  // ── Load / start game ────────────────────────────────────
   useEffect(() => {
-    const goal = cashFlowGoal || 10000
-    if (isNew) {
-      dispatch(startNewGame(difficulty || 'medium', goal))
-    } else {
-      const slot = getSlot(user.id, slotIndex)
-      if (slot?.state) {
-        dispatch({ type: 'LOAD_GAME', payload: { savedState: slot.state, cashFlowGoal: goal } })
-      } else {
+    async function init() {
+      const goal = cashFlowGoal || 10000
+      if (isNew) {
         dispatch(startNewGame(difficulty || 'medium', goal))
+      } else if (cloud) {
+        // Load from Firestore; fall back to startNewGame if empty
+        const slot = await loadSlotFromFirestore(user.id, slotIndex)
+        if (slot?.state) {
+          dispatch({ type: 'LOAD_GAME', payload: { savedState: slot.state, cashFlowGoal: goal } })
+        } else {
+          dispatch(startNewGame(difficulty || 'medium', goal))
+        }
+      } else {
+        // Guest — local storage
+        const slot = getSlot(user.id, slotIndex)
+        if (slot?.state) {
+          dispatch({ type: 'LOAD_GAME', payload: { savedState: slot.state, cashFlowGoal: goal } })
+        } else {
+          dispatch(startNewGame(difficulty || 'medium', goal))
+        }
       }
+      setReady(true)
     }
-    setReady(true)
-  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+    init()
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-save on month advance or property acquisition ───
+  // state.currentMonth rises on ADVANCE_MONTH
+  // state.properties.length rises on BUY_PROPERTY
+  // We skip the very first fire (initialization) with hasInitializedRef.
+  useEffect(() => {
+    if (!ready || !cloud) return
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true
+      return
+    }
+    // Debounce: wait 800 ms in case multiple triggers fire in quick succession
+    clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveSlotToFirestore(user.id, slotIndex, state).catch(console.error)
+    }, 800)
+    return () => clearTimeout(autoSaveTimerRef.current)
+  }, [state.currentMonth, state.properties.length])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Manual save (Save button) ────────────────────────────
+  async function handleSave() {
+    if (cloud) {
+      await saveSlotToFirestore(user.id, slotIndex, state)
+    } else {
+      setSlot(user.id, slotIndex, state)
+    }
+  }
+
+  // ── Exit (saves first) ───────────────────────────────────
+  async function handleExit() {
+    if (cloud) {
+      await saveSlotToFirestore(user.id, slotIndex, state)
+    } else {
+      setSlot(user.id, slotIndex, state)
+    }
+    onExit()
+  }
 
   if (!ready || !state.gameStarted) return (
     <div className="loading-screen">
@@ -35,25 +95,19 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
     </div>
   )
 
-  function handleSave() {
-    setSlot(user.id, slotIndex, state)
-  }
-
-  function handleExit() {
-    setSlot(user.id, slotIndex, state)  // auto-save on exit
-    onExit()
-  }
-
   return <Dashboard onSave={handleSave} onExit={handleExit} slotIndex={slotIndex} />
 }
 
-function AppContent() {
-  const [user,       setUser]       = useState(() => getStoredUser())
-  const [activeSlot, setActiveSlot] = useState(null)  // { slotIndex, isNew, difficulty }
+// ─── AppContent ────────────────────────────────────────────────────────────
 
-  function handleLogin(googleUser) {
-    storeUser(googleUser)
-    setUser(googleUser)
+function AppContent() {
+  const [user,        setUser]       = useState(() => getStoredUser())
+  const [activeSlot,  setActiveSlot] = useState(null)
+
+  function handleLogin(firebaseUser) {
+    // Store minimal user info locally so the app remembers who is logged in on reload
+    storeUser(firebaseUser)
+    setUser(firebaseUser)
   }
 
   function handleLogout() {
@@ -62,8 +116,7 @@ function AppContent() {
     setActiveSlot(null)
   }
 
-  if (!user) return <LoginScreen onLogin={handleLogin} />
-
+  if (!user)       return <LoginScreen onLogin={handleLogin} />
   if (!activeSlot) return (
     <SlotScreen
       user={user}
@@ -86,18 +139,8 @@ function AppContent() {
   )
 }
 
+// ─── App ───────────────────────────────────────────────────────────────────
+
 export default function App() {
-  // If no Client ID configured, still render — LoginScreen shows setup instructions
-  if (!GOOGLE_CLIENT_ID) {
-    return (
-      <GoogleOAuthProvider clientId="placeholder">
-        <AppContent />
-      </GoogleOAuthProvider>
-    )
-  }
-  return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <AppContent />
-    </GoogleOAuthProvider>
-  )
+  return <AppContent />
 }

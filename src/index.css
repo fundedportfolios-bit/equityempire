@@ -269,6 +269,46 @@ body {
 .login-setup-body  { font-size: 0.78rem; color: var(--text-muted); margin: 0; line-height: 1.5; }
 .login-setup-body code { background: var(--bg-elevated); padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; }
 
+/* Google sign-in button (replaces @react-oauth/google widget) */
+.btn-google-signin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: #fff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  cursor: pointer;
+  width: 100%;
+  max-width: 260px;
+  justify-content: center;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.btn-google-signin:hover:not(:disabled) {
+  background: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.btn-google-signin:disabled { opacity: 0.6; cursor: not-allowed; }
+.google-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.login-error {
+  font-size: 0.78rem;
+  color: var(--negative);
+  text-align: center;
+  margin: 0;
+}
+
+/* Cloud sync badge on slot screen */
+.slot-cloud-badge {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin: -6px 0 8px;
+}
+
 .login-guest-section {
   display: flex;
   flex-direction: column;
@@ -606,6 +646,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Monthly row — no label, distinct border + tinted background */
+.stats-block--monthly {
+  margin-top: 2px;
+}
+.stats-block--monthly .stats-strip {
+  border: 2px solid rgba(99, 179, 237, 0.6);
+  background: rgba(99, 179, 237, 0.1);
 }
 
 .stats-section-label {
@@ -1127,6 +1176,13 @@ body {
   margin-top: 2px;
 }
 .modal-subtitle strong { color: var(--positive); }
+.modal-subtitle--hint {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
 
 .modal-close-btn {
   flex-shrink: 0;
@@ -1250,6 +1306,16 @@ body {
   font-weight: 700;
   color: var(--text);
 }
+/* Colour overrides must beat the base rule above */
+.option-stat-value.positive { color: var(--positive); }
+.option-stat-value.negative { color: var(--negative); }
+
+/* Projected Owner CF — highlighted row, helps the player distinguish from gross net CF */
+.option-stat--highlight-cf {
+  background: rgba(99, 179, 237, 0.12);
+  border-radius: var(--radius-sm);
+}
+.option-stat--highlight-cf .option-stat-label { color: #93c5fd; }
 
 .option-deficit {
   font-size: 12px;

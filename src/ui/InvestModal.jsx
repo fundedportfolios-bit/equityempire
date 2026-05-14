@@ -52,6 +52,14 @@ function PropertyOption({ option, playerCash, onBuy }) {
             {formatCashFlow(option.netCashFlow)}/mo
           </span>
         </div>
+        {option.monthlyIncome > 0 && (
+          <div className="option-stat option-stat--highlight-cf">
+            <span className="option-stat-label">Projected Owner CF</span>
+            <span className={`option-stat-value ${option.projectedOwnerCashFlow >= 0 ? 'positive' : 'negative'}`}>
+              {formatCashFlow(option.projectedOwnerCashFlow ?? 0)}/mo
+            </span>
+          </div>
+        )}
         <div className="option-stat">
           <span className="option-stat-label">Down Payment</span>
           <span className="option-stat-value">{formatCurrency(option.downPayment)}</span>
@@ -137,11 +145,13 @@ export default function InvestModal({ onClose }) {
   const { state, dispatch } = useGame()
   const [options, setOptions] = useState([])
 
-  // Generate options once when the modal opens, sorted cheapest first
+  // Generate options once when the modal opens.
+  // Hot deal always lands at the top; other options sort cheapest first.
   useEffect(() => {
     const opts = generatePropertyOptions(state)
-    opts.sort((a, b) => a.cashNeeded - b.cashNeeded)
-    setOptions(opts)
+    const hot  = opts.filter(o => o.isHotDeal)
+    const rest = opts.filter(o => !o.isHotDeal).sort((a, b) => a.cashNeeded - b.cashNeeded)
+    setOptions([...hot, ...rest])
   }, [])
 
   function handleBuy(option) {
@@ -160,7 +170,10 @@ export default function InvestModal({ onClose }) {
       <div className="modal-sheet">
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">Choose a Property</h2>
+            <h2 className="modal-title">Properties Currently For Sale</h2>
+            <p className="modal-subtitle modal-subtitle--hint">
+              Close and re-open for more options
+            </p>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>
             </p>

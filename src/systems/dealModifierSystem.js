@@ -1,3 +1,17 @@
+// dealModifierSystem.js
+//
+// Picks a random archetype × condition combination for a generated property
+// option, and produces multipliers used by the property income calibration:
+//   - priceMultiplier            → adjusts purchase price
+//   - cashFlowMultiplier         → adjusts target owner cash flow component only
+//                                  (NOT the full gross income — that uses targetCF
+//                                  per-unit baseline from the property template)
+//   - expenseMultiplier          → multiplies expected cost drag (and visible
+//                                  monthly expenses for non-income properties)
+//   - maintenanceRiskMultiplier  → carried to the property for the event system
+//   - immediateRepairCostRaw     → upfront repair cost
+//   - upgradePotential           → informational; used for UI badges
+
 import MODIFIERS from '../data/dealModifiers.json'
 
 function randBetween(min, max) {
@@ -33,17 +47,20 @@ export function applyDealModifier(basePurchasePrice, opts = {}) {
     condition.scoreMin + Math.random() * (condition.scoreMax - condition.scoreMin)
   )
 
-  const archPriceMult = randBetween(archetype.purchasePriceMultiplierMin, archetype.purchasePriceMultiplierMax)
-  const condPriceMult = randBetween(condition.purchasePriceMultiplierMin, condition.purchasePriceMultiplierMax)
+  const archPriceMult   = randBetween(archetype.purchasePriceMultiplierMin, archetype.purchasePriceMultiplierMax)
+  const condPriceMult   = randBetween(condition.purchasePriceMultiplierMin, condition.purchasePriceMultiplierMax)
   const priceMultiplier = Math.max(0.45, Math.min(1.55, archPriceMult * condPriceMult))
 
-  const archIncomeMult = randBetween(archetype.incomeMultiplierMin, archetype.incomeMultiplierMax)
-  const incomeMultiplier = Math.max(0, archIncomeMult * condition.incomeMultiplier)
+  // Cash-flow multiplier: archetype × condition (floor 0).
+  // Applied ONLY to the target owner CF component, not to gross income.
+  const archCFMult        = randBetween(archetype.cashFlowMultiplierMin, archetype.cashFlowMultiplierMax)
+  const condCFMult        = randBetween(condition.cashFlowMultiplierMin, condition.cashFlowMultiplierMax)
+  const cashFlowMultiplier = Math.max(0, archCFMult * condCFMult)
 
-  const expenseMultiplier = condition.monthlyExpenseMultiplier
+  const expenseMultiplier         = condition.monthlyExpenseMultiplier
   const maintenanceRiskMultiplier = condition.maintenanceRiskMultiplier
 
-  const repairPercent = randBetween(
+  const repairPercent          = randBetween(
     condition.immediateRepairCostPercentMin,
     condition.immediateRepairCostPercentMax
   )
@@ -53,13 +70,14 @@ export function applyDealModifier(basePurchasePrice, opts = {}) {
     dealArchetypeId:            archetype.id,
     dealArchetypeLabel:         archetype.label,
     dealDescription:            archetype.description,
+    upgradePotential:           archetype.upgradePotential ?? 'medium',
     conditionId:                condition.id,
     conditionLabel:             condition.label,
     conditionScore,
     valueAddPotential:          condition.valueAddPotential,
     maintenanceRiskMultiplier,
     priceMultiplier,
-    incomeMultiplier,
+    cashFlowMultiplier,
     expenseMultiplier,
     immediateRepairCostRaw,
     immediateRepairCostPercent: Math.round(repairPercent * 10) / 10,

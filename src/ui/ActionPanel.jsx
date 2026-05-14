@@ -229,8 +229,8 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
             return (
               <button
                 key={action.id}
-                className={`action-btn action-btn--live${action.id === 'staff' ? ' action-btn--staff' : ''}${meta.disabled ? ' action-btn--muted' : ''}`}
-                disabled={meta.disabled}
+                className={`action-btn action-btn--live${meta.disabled ? ' action-btn--muted' : ''}`}
+                disabled={action.id !== 'staff' && meta.disabled}
                 onClick={() => handlers[action.id]?.()}
               >
                 <span className="action-icon">{action.icon}</span>

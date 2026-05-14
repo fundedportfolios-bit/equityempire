@@ -1,4 +1,5 @@
 import { useGame } from '../core/gameState.js'
+import { DIFFICULTY_SETTINGS } from '../data/difficultySettings.js'
 import { calculateEquity, calculateNetCashFlow } from '../utils/financeMath.js'
 import { formatShort, formatCashFlow } from '../utils/formatters.js'
 
@@ -43,21 +44,25 @@ export default function PortfolioSummary() {
   const equity      = calculateEquity(state.portfolioValue, state.totalDebt)
   const netCashFlow = calculateNetCashFlow(state.monthlyIncome, state.monthlyExpenses) - (state.staffExpense || 0)
 
-  const pmmsRate    = state.marketInterestRate ?? 0.0678
-  const displayRate = ((pmmsRate + 0.012) * 100).toFixed(2)
-
   const goal        = state.cashFlowGoal || 10000
   const goalPct     = goal > 0 ? Math.round((netCashFlow / goal) * 100) : 0
   const goalPctDisplay = `${goalPct}%`
   const goalClass   = goalPct >= 100 ? 'positive' : goalPct >= 50 ? 'goal-mid' : ''
 
+  // Total Return = (Equity + Cash) / Starting Cash × 100
+  const initialCash    = DIFFICULTY_SETTINGS[state.difficulty]?.startingCash ?? 75000
+  const totalReturn    = Math.round(((equity + state.cash - initialCash) / initialCash) * 100)
+  const totalReturnDisplay = totalReturn === 0 ? '0%' : `${totalReturn > 0 ? '+' : ''}${totalReturn}%`
+  const totalReturnClass   = totalReturn >= 100 ? 'positive' : totalReturn < 0 ? 'negative' : ''
+
   return (
     <section className="portfolio-summary">
+      {/* ── Row 1 + 2: named DASHBOARD ─────────────────────── */}
       <div className="stats-block">
-        <span className="stats-section-label">OVERVIEW</span>
+        <span className="stats-section-label">DASHBOARD</span>
         <div className="stats-strip">
-          <StatCard label="Cash" value={formatShort(state.cash)} />
-          <StatCard label="Value" value={formatShort(state.portfolioValue)} />
+          <StatCard label="Cash"   value={formatShort(state.cash)} />
+          <StatCard label="Value"  value={formatShort(state.portfolioValue)} />
           <StatCard
             label="Equity"
             value={formatShort(equity)}
@@ -65,17 +70,22 @@ export default function PortfolioSummary() {
           />
           <StatCard label="Debt" value={formatShort(state.totalDebt)} />
           <StatCard
+            label="Total Return"
+            value={totalReturnDisplay}
+            valueClass={totalReturnClass}
+          />
+          <StatCard
             label="% Goal"
             value={goalPctDisplay}
             valueClass={goalClass}
           />
-          <StatCard label="APR" value={`${displayRate}%`} />
         </div>
       </div>
-      <div className="stats-block">
-        <span className="stats-section-label">MONTHLY</span>
+
+      {/* ── Monthly row: no label, distinct border + bg ─────── */}
+      <div className="stats-block stats-block--monthly">
         <div className="stats-strip">
-          <StatCard label="Income" value={formatShort(state.monthlyIncome)} />
+          <StatCard label="Income"   value={formatShort(state.monthlyIncome)} />
           <StatCard label="Expenses" value={formatShort(state.monthlyExpenses)} />
           <StatCard
             label="Net Cash Flow"
@@ -84,6 +94,7 @@ export default function PortfolioSummary() {
           />
         </div>
       </div>
+
       <PropertyTypeBar properties={state.properties} staffCount={state.staffCount || 0} />
     </section>
   )

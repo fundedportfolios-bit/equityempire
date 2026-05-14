@@ -1,19 +1,26 @@
-import { useState } from 'react'
-import { googleLogout } from '@react-oauth/google'
+import { useState, useEffect }                                from 'react'
+import { signOut }                                           from 'firebase/auth'
+import { auth }                                              from '../firebase/config.js'
+import { getAllSlotsFromFirestore, deleteSlotFromFirestore }  from '../firebase/firestoreService.js'
 import { getAllSlots, deleteSlot, SLOT_COUNT, getUserGoal, setUserGoal } from '../auth/saveSlots.js'
-import { DIFFICULTY_SETTINGS } from '../data/difficultySettings.js'
-import { formatShort } from '../utils/formatters.js'
-import { formatMonthLabel } from '../core/timeSystem.js'
+import { DIFFICULTY_SETTINGS }                               from '../data/difficultySettings.js'
+import { formatShort }                                       from '../utils/formatters.js'
+import { formatMonthLabel }                                  from '../core/timeSystem.js'
 
 const GOAL_OPTIONS = [5000, ...Array.from({ length: 23 }, (_, i) => 6000 + i * 2000)]
+const isCloudUser  = (user) => user?.id && user.id !== 'guest'
 
+// ─── SlotCard ─────────────────────────────────────────────
 function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
   const [pickingDifficulty, setPickingDifficulty] = useState(false)
-  const [confirmDelete, setConfirmDelete]         = useState(false)
+  const [confirmDelete,     setConfirmDelete]     = useState(false)
 
   if (data) {
-    const { state, savedAt } = data
-    const savedDate  = new Date(savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const { state, savedAt, updatedAt } = data
+    const displayDate = updatedAt ?? savedAt
+    const savedDate   = displayDate
+      ? new Date(displayDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      : '—'
     const monthLabel = formatMonthLabel(state.currentMonth ?? 1).replace(' — ', ' ')
     const propCount  = state.properties?.length ?? 0
 
@@ -92,9 +99,25 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
   )
 }
 
+// ─── SlotScreen ───────────────────────────────────────────
 export default function SlotScreen({ user, onSelectSlot, onLogout }) {
-  const [slots, setSlots] = useState(() => getAllSlots(user.id))
-  const [goal,  setGoal]  = useState(() => getUserGoal(user.id))
+  const cloud = isCloudUser(user)
+
+  // Slots — null = still loading (cloud users only)
+  const [slots,   setSlots]   = useState(() => cloud ? null : getAllSlots(user.id))
+  const [loading, setLoading] = useState(cloud)
+  const [goal,    setGoal]    = useState(() => getUserGoal(user.id))
+
+  // Load cloud saves on mount
+  useEffect(() => {
+    if (!cloud) return
+    getAllSlotsFromFirestore(user.id)
+      .then(s => { setSlots(s); setLoading(false) })
+      .catch(() => {
+        setSlots(Array(SLOT_COUNT).fill(null))
+        setLoading(false)
+      })
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleGoalChange(e) {
     const val = parseInt(e.target.value, 10)
@@ -102,21 +125,37 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
     setUserGoal(user.id, val)
   }
 
-  function handleDelete(i) {
-    deleteSlot(user.id, i)
-    setSlots(getAllSlots(user.id))
+  async function handleDelete(i) {
+    if (cloud) {
+      await deleteSlotFromFirestore(user.id, i)
+      const updated = await getAllSlotsFromFirestore(user.id)
+      setSlots(updated)
+    } else {
+      deleteSlot(user.id, i)
+      setSlots(getAllSlots(user.id))
+    }
   }
 
-  function handleLogout() {
-    try { googleLogout() } catch {}
+  async function handleLogout() {
+    if (cloud) {
+      try { await signOut(auth) } catch {}
+    }
     onLogout()
+  }
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <p className="loading-text">Loading saves…</p>
+      </div>
+    )
   }
 
   return (
     <div className="slot-screen">
       <div className="slot-screen-header">
         <div className="slot-header-top">
-          <h1 className="slot-title">Equity Empire<span className="game-version">v3.1</span></h1>
+          <h1 className="slot-title">Equity Empire<span className="game-version">v4.0</span></h1>
           <div className="slot-user-row">
             {user.picture && (
               <img src={user.picture} className="slot-avatar" alt="" referrerPolicy="no-referrer" />
@@ -144,8 +183,12 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
 
       <h2 className="slot-choose-label">Choose a Save Slot</h2>
 
+      {cloud && (
+        <p className="slot-cloud-badge">☁ Saves sync across all your devices</p>
+      )}
+
       <div className="slot-cards">
-        {slots.map((data, i) => (
+        {(slots || Array(SLOT_COUNT).fill(null)).map((data, i) => (
           <SlotCard
             key={i}
             slotIndex={i}
