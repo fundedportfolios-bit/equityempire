@@ -33,8 +33,9 @@ export default function LoginScreen({ onLogin }) {
       <div className="login-card">
         <h1 className="login-title">Equity Empire<span className="game-version">v4.0</span></h1>
         <p className="login-tagline">
-          Build a real estate portfolio from the ground up.<br />
-          Balance cash flow, debt, equity, and opportunity.
+          Build a real estate portfolio<br />
+          from the ground up.<br />
+          Invest, maintain, refinance, repeat.
         </p>
 
         <div className="login-divider" />
