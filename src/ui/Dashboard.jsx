@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGame } from '../core/gameState.js'
-import { setModalOpen, toggleTrivia, openInvestModal } from '../core/gameEngine.js'
+import { setModalOpen, toggleTrivia, openInvestModal, dismissWin } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
 import { auth } from '../firebase/config.js'
 import PortfolioSummary from './PortfolioSummary.jsx'
@@ -152,7 +152,7 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       {state.activeMilestone && <MilestoneModal />}
       {state.gameWon && !winDismissed && (
         <WinModal
-          onContinue={() => setWinDismissed(true)}
+          onContinue={() => { dispatch(dismissWin()); setWinDismissed(true) }}
           onExit={onExit}
         />
       )}

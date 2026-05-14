@@ -229,7 +229,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
             return (
               <button
                 key={action.id}
-                className={`action-btn action-btn--live${meta.disabled ? ' action-btn--muted' : ''}`}
+                className={`action-btn action-btn--live action-btn--${action.id}${meta.disabled ? ' action-btn--muted' : ''}`}
                 disabled={action.id !== 'staff' && meta.disabled}
                 onClick={() => handlers[action.id]?.()}
               >

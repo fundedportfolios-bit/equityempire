@@ -49,11 +49,14 @@ export default function PortfolioSummary() {
   const goalPctDisplay = `${goalPct}%`
   const goalClass   = goalPct >= 100 ? 'positive' : goalPct >= 50 ? 'goal-mid' : ''
 
-  // Total Return = (Equity + Cash) / Starting Cash × 100
+  // Avg Return/Yr = total return % ÷ years elapsed
   const initialCash    = DIFFICULTY_SETTINGS[state.difficulty]?.startingCash ?? 75000
-  const totalReturn    = Math.round(((equity + state.cash - initialCash) / initialCash) * 100)
-  const totalReturnDisplay = totalReturn === 0 ? '0%' : `${totalReturn > 0 ? '+' : ''}${totalReturn}%`
-  const totalReturnClass   = totalReturn >= 100 ? 'positive' : totalReturn < 0 ? 'negative' : ''
+  const totalReturnPct = ((equity + state.cash - initialCash) / initialCash) * 100
+  const monthsElapsed  = Math.max(1, (state.currentMonth || 1) - 1)
+  const yearsElapsed   = Math.max(1 / 12, monthsElapsed / 12)
+  const annualReturn   = Math.round(totalReturnPct / yearsElapsed)
+  const annualReturnDisplay = annualReturn === 0 ? '0%' : `${annualReturn > 0 ? '+' : ''}${annualReturn}%`
+  const annualReturnClass   = annualReturn >= 20 ? 'positive' : annualReturn < 0 ? 'negative' : ''
 
   return (
     <section className="portfolio-summary">
@@ -70,9 +73,9 @@ export default function PortfolioSummary() {
           />
           <StatCard label="Debt" value={formatShort(state.totalDebt)} />
           <StatCard
-            label="Total Return"
-            value={totalReturnDisplay}
-            valueClass={totalReturnClass}
+            label="Avg Return/Yr"
+            value={annualReturnDisplay}
+            valueClass={annualReturnClass}
           />
           <StatCard
             label="% Goal"

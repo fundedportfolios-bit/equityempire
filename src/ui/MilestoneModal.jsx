@@ -3,10 +3,11 @@ import { dismissMilestone } from '../core/gameEngine.js'
 import { formatShort } from '../utils/formatters.js'
 
 const MILESTONE_CONFIG = {
-  1000000:  { emoji: '🎯', color: '#22c55e', label: '$1M Portfolio!' },
-  5000000:  { emoji: '🚀', color: '#3b82f6', label: '$5M Portfolio!' },
-  10000000: { emoji: '👑', color: '#a855f7', label: '$10M Portfolio!' },
-  50000000: { emoji: '🏆', color: '#f59e0b', label: '$50M Portfolio!' },
+  1000000:    { emoji: '🎯', color: '#22c55e', label: '$1M Portfolio!' },
+  5000000:    { emoji: '🚀', color: '#3b82f6', label: '$5M Portfolio!' },
+  10000000:   { emoji: '👑', color: '#a855f7', label: '$10M Portfolio!' },
+  50000000:   { emoji: '🏆', color: '#f59e0b', label: '$50M Portfolio!' },
+  halfwayCF:  { emoji: '💸', color: '#fbbf24', label: 'Halfway to Cash Flow Goal!' },
 }
 
 function formatMonths(m) {
@@ -25,6 +26,10 @@ export default function MilestoneModal() {
   const equity   = state.portfolioValue - state.totalDebt
   const netCF    = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
   const timeline = formatMonths(Math.max(1, state.currentMonth - 1))
+  const goal     = state.cashFlowGoal || 10000
+  const subtitle = m === 'halfwayCF'
+    ? `You're earning ${formatShort(netCF)}/mo — halfway to your ${formatShort(goal)}/mo goal · ${timeline}`
+    : `Reached in ${timeline}`
 
   return (
     <div className="milestone-overlay">
@@ -32,7 +37,7 @@ export default function MilestoneModal() {
         <div className="milestone-glow" />
         <div className="milestone-emoji">{cfg.emoji}</div>
         <h2 className="milestone-title">{cfg.label}</h2>
-        <p className="milestone-sub">Reached in {timeline}</p>
+        <p className="milestone-sub">{subtitle}</p>
 
         <div className="milestone-stats">
           <div className="milestone-stat">

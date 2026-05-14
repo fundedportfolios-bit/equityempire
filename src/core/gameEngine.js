@@ -115,6 +115,10 @@ export function dismissMilestone() {
   return { type: 'DISMISS_MILESTONE' }
 }
 
+export function dismissWin() {
+  return { type: 'DISMISS_WIN' }
+}
+
 // Placeholder — will grow as win/loss conditions are defined
 export function checkWinLoss(state) {
   if (state.cash < 0 && state.monthlyIncome === 0) return 'loss'

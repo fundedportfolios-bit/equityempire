@@ -53,6 +53,7 @@ export const INITIAL_STATE = {
   // Milestones
   activeMilestone: null,
   milestonesHit: [],
+  cashFlowMilestoneHit: false,
 
   // Meta
   gameStarted: false,
@@ -173,14 +174,28 @@ export function gameReducer(state, action) {
       const allAlerts = [monthAlert, ...strActivationAlerts, ...staffAlerts.map(a => ({ ...a, timestamp: newMonth })), ...newAlerts.map(a => ({ ...a, timestamp: a.timestamp ?? newMonth })), ...state.alerts].slice(0, 20)
 
       const newNetCF  = totals.monthlyIncome - totals.monthlyExpenses - newStaffExpense
-      const justWon   = !state.gameWon && newMonth > 1 && newNetCF >= (state.cashFlowGoal || 10000)
+      const goal      = state.cashFlowGoal || 10000
+      const justWon   = !state.gameWon && newMonth > 1 && newNetCF >= goal
 
       const MILESTONES = [1000000, 5000000, 10000000, 50000000]
-      const newMilestone = MILESTONES.find(m =>
+      const portfolioMilestone = MILESTONES.find(m =>
         totals.portfolioValue >= m &&
         !(state.milestonesHit || []).includes(m) &&
         (state.portfolioValue || 0) < m
       ) ?? null
+
+      // Cash flow halfway milestone — fires once when net CF first crosses 50% of goal
+      const halfwayGoal       = goal * 0.5
+      const justHitHalfwayCF  =
+        !state.cashFlowMilestoneHit &&
+        !state.gameWon &&
+        !justWon &&
+        !portfolioMilestone &&
+        newMonth > 1 &&
+        newNetCF >= halfwayGoal
+
+      const newMilestone = portfolioMilestone ?? (justHitHalfwayCF ? 'halfwayCF' : null)
+      const milestoneOrWin = newMilestone || justWon
 
       return {
         ...state,
@@ -195,12 +210,13 @@ export function gameReducer(state, action) {
         activeTriviaQuestion:  triviaQuestion,
         lastTriviaMonth:       shouldTriggerTrivia ? newMonth : (state.lastTriviaMonth ?? 0),
         usedTriviaQuestionIds: state.usedTriviaQuestionIds ?? [],
-        isModalOpen:           shouldTriggerTrivia ? true : (newMilestone ? true : state.isModalOpen),
+        isModalOpen:           shouldTriggerTrivia ? true : (milestoneOrWin ? true : state.isModalOpen),
         alerts:                allAlerts,
-        isPaused:              newMilestone ? true : (shouldPause ? true : state.isPaused),
+        isPaused:              milestoneOrWin ? true : (shouldPause ? true : state.isPaused),
         gameWon:               justWon ? true : state.gameWon,
         activeMilestone:       newMilestone ?? state.activeMilestone,
-        milestonesHit:         newMilestone ? [...(state.milestonesHit || []), newMilestone] : (state.milestonesHit || []),
+        milestonesHit:         portfolioMilestone ? [...(state.milestonesHit || []), portfolioMilestone] : (state.milestonesHit || []),
+        cashFlowMilestoneHit:  state.cashFlowMilestoneHit || justHitHalfwayCF,
       }
     }
 
@@ -525,6 +541,13 @@ export function gameReducer(state, action) {
         (p.activeEvents || []).some(e => e.priority === 'Critical')
       )
       return { ...state, activeMilestone: null, isPaused: hasCritical, isModalOpen: hasCritical }
+    }
+
+    case 'DISMISS_WIN': {
+      const hasCritical = state.properties.some(p =>
+        (p.activeEvents || []).some(e => e.priority === 'Critical')
+      )
+      return { ...state, isPaused: hasCritical, isModalOpen: hasCritical }
     }
 
     case 'TOGGLE_TRIVIA':

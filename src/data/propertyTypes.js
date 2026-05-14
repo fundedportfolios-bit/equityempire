@@ -125,7 +125,7 @@ export const PROPERTY_TYPES = [
     units: 12,
     typicalStrategy: 'income scaling',
     description: 'An 8–16 unit building that bridges small residential and commercial-scale ownership. More income stability than a 4-plex, more manageable than a full apartment complex.',
-    icon: '🏗',
+    icon: '🏬',
   },
   {
     id: 'fix_flip',
