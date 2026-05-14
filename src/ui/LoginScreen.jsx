@@ -38,6 +38,12 @@ export default function LoginScreen({ onLogin }) {
           Invest, maintain, refinance, repeat.
         </p>
 
+        <img
+          src="/hero-buildings.png"
+          alt="Portfolio growth — small homes to large apartment buildings"
+          className="login-hero-img"
+        />
+
         <div className="login-divider" />
 
         <div className="login-google-wrap">
