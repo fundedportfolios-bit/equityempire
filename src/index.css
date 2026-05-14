@@ -1912,6 +1912,8 @@ body {
   border-left: 1px solid rgba(255,255,255,0.1);
   flex-shrink: 0;
 }
+.ptb-staff .ptc-icon  { filter: hue-rotate(180deg) saturate(3.5) brightness(1.4); }
+.ptb-staff .ptc-count { color: #38bdf8; }
 
 .property-type-chip {
   display: flex;
