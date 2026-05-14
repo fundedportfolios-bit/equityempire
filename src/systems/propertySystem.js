@@ -24,14 +24,16 @@ function isUnlocked(pt, state) {
       return true
     case 'single_str':
       return owned >= 1 || cash >= 25000
-    case 'medium_multifamily':
-      return portfolioValue >= 750000
-    case 'small_multifamily':
     case 'fix_flip':
-    case 'micro_resort':
+    case 'small_multifamily':
+      return portfolioValue > 0
+    case 'medium_multifamily':
+      return portfolioValue >= 1_000_000
     case 'apartment_building':
+    case 'micro_resort':
+      return portfolioValue >= 2_000_000
     case 'apartment_complex':
-      return portfolioValue >= 1000000
+      return portfolioValue >= 5_000_000
     default:
       return false
   }
@@ -211,79 +213,54 @@ function isProjectedPositive(opt) {
   return (opt.projectedOwnerCashFlow ?? 0) > 0
 }
 
-// Slot plan: portfolio-value tiers determine which property TYPES each slot
-// should try, in order of preference. Every slot must produce an option whose
-// cashNeeded ≤ state.cash (the picker retries with different price rolls,
-// falling back through the type list).
-function buildSlots(state) {
+// ─── Tier-based slot plan ──────────────────────────────────────
+// Ordered 5-tier table keyed off state.portfolioValue. Each tier specifies
+// an exact 4-type mix. First matching tier wins.
+const INVEST_TIERS = [
+  {
+    id: 'starter',
+    matches: (pv) => pv === 0,
+    mix: ['single_ltr', 'single_ltr', 'single_str', 'single_str'],
+  },
+  {
+    id: 'early',
+    matches: (pv) => pv > 0 && pv < 1_000_000,
+    mix: ['single_ltr', 'single_str', 'fix_flip', 'small_multifamily'],
+  },
+  {
+    id: 'mid',
+    matches: (pv) => pv >= 1_000_000 && pv < 2_000_000,
+    mix: ['single_str', 'fix_flip', 'small_multifamily', 'medium_multifamily'],
+  },
+  {
+    id: 'growth',
+    matches: (pv) => pv >= 2_000_000 && pv < 5_000_000,
+    mix: ['medium_multifamily', 'apartment_building', 'apartment_building', 'micro_resort'],
+  },
+  {
+    id: 'mogul',
+    matches: (pv) => pv >= 5_000_000,
+    mix: ['apartment_complex', 'apartment_complex', 'micro_resort', 'micro_resort'],
+  },
+]
+
+export function getInvestTier(state) {
   const pv = state.portfolioValue || 0
-
-  // Game start: player has no properties — 3 affordable LTRs, good condition, positive CF
-  if (state.properties.length === 0) {
-    const opts = { allowedConditionIds: ['good', 'excellent'], requirePositiveCashFlow: true }
-    return [
-      { types: ['single_ltr'], modifierOpts: opts },
-      { types: ['single_ltr'], modifierOpts: opts },
-      { types: ['single_ltr'], modifierOpts: opts },
-    ]
-  }
-
-  // Portfolio < $1M: 1 LTR + 1 STR + (LTR or STR)
-  if (pv < 1_000_000) {
-    return [
-      { types: ['single_ltr'] },
-      { types: ['single_str', 'single_ltr'] },
-      { types: ['single_str', 'single_ltr'] },
-    ]
-  }
-
-  // $1M ≤ pv < $2M: at least 1 small multifamily, others LTR/STR/medium MF
-  if (pv < 2_000_000) {
-    return [
-      { types: ['small_multifamily'] },
-      { types: ['single_ltr', 'single_str', 'medium_multifamily'] },
-      { types: ['single_str', 'medium_multifamily', 'single_ltr'] },
-    ]
-  }
-
-  // pv ≥ $2M: 1 LTR or STR + 2 from apartments/resorts
-  return [
-    { types: ['single_ltr', 'single_str'] },
-    { types: ['micro_resort', 'apartment_building', 'apartment_complex'] },
-    { types: ['apartment_building', 'apartment_complex', 'micro_resort'] },
-  ]
+  return INVEST_TIERS.find(t => t.matches(pv)) || INVEST_TIERS[0]
 }
 
-// For a single slot: walk through the requested types, generate options of
-// each, return the first affordable one. If none are affordable across all
-// attempts, fall back to a single LTR (always unlocked). Last resort: cheapest
-// option we found during the retries.
-function pickOptionForSlot(slot, state, apr) {
-  const cash    = state.cash || 0
-  const modOpts = slot.modifierOpts || {}
-  let cheapest  = null
-
-  for (const typeId of slot.types) {
-    const template = PROPERTY_TYPES.find(pt => pt.id === typeId && isUnlocked(pt, state))
-    if (!template) continue
-    for (let i = 0; i < 8; i++) {
-      const opt = generateOption(template, state.difficulty, apr, modOpts)
-      if (opt.cashNeeded <= cash) return opt
-      if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
-    }
+// Try N price-rolls of a single type; return the first option whose
+// cashNeeded ≤ player cash. Returns null when no affordable roll is found —
+// callers should then drop that slot from the modal (no LTR fallback, no
+// "cheapest unaffordable" emission).
+function tryAffordableRoll(typeId, state, apr, modOpts, maxAttempts = 8) {
+  const template = PROPERTY_TYPES.find(pt => pt.id === typeId && isUnlocked(pt, state))
+  if (!template) return null
+  for (let i = 0; i < maxAttempts; i++) {
+    const opt = generateOption(template, state.difficulty, apr, modOpts)
+    if (opt.cashNeeded <= (state.cash || 0)) return opt
   }
-
-  // Fallback: cheapest affordable LTR
-  const ltr = PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
-  if (ltr) {
-    for (let i = 0; i < 6; i++) {
-      const opt = generateOption(ltr, state.difficulty, apr, modOpts)
-      if (opt.cashNeeded <= cash) return opt
-      if (!cheapest || opt.cashNeeded < cheapest.cashNeeded) cheapest = opt
-    }
-  }
-
-  return cheapest
+  return null
 }
 
 export function generatePropertyOptions(state) {
@@ -291,30 +268,37 @@ export function generatePropertyOptions(state) {
   const openCount = state.investOpenCount || 0
   const isHotDeal = openCount > 0 && openCount % 6 === 0
 
-  const slots   = buildSlots(state)
-  const options = []
+  const tier    = getInvestTier(state)
+  const mix     = tier.mix
+  // Starter tier uses stricter modifier: good/excellent condition + positive CF
+  const modOpts = tier.id === 'starter'
+    ? { allowedConditionIds: ['good', 'excellent'], requirePositiveCashFlow: true }
+    : {}
 
-  // Hot deal prepended when triggered — only included if we can find one
-  // that is BOTH affordable AND meets the hot deal positive-CF requirement.
+  // 1. One affordable roll per slot in the mix. Slot is null if no affordable
+  //    roll could be generated within maxAttempts — that slot is dropped.
+  const slots = mix.map(typeId => tryAffordableRoll(typeId, state, apr, modOpts))
+
+  // 2. Hot deal substitutes for one slot (never adds a 5th card). The hot
+  //    deal's property type is drawn at random from the current tier's mix.
   if (isHotDeal) {
-    const ltr = PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
-    if (ltr) {
-      const hot = findAffordableHotDeal(ltr, state.difficulty, apr, state.cash)
-      if (hot) options.push(hot)
+    const hotTypeId = mix[randomInt(0, mix.length - 1)]
+    const template  = PROPERTY_TYPES.find(pt => pt.id === hotTypeId && isUnlocked(pt, state))
+    const hot       = template ? findAffordableHotDeal(template, state.difficulty, apr, state.cash) : null
+    if (hot) {
+      const idx = mix.indexOf(hotTypeId)
+      slots[idx] = hot
     }
   }
 
-  for (const slot of slots) {
-    const opt = pickOptionForSlot(slot, state, apr)
-    if (opt) options.push(opt)
-  }
-
-  return options.filter(Boolean)
+  // 0-4 cards depending on affordability
+  return slots.filter(Boolean)
 }
 
 // Try up to 18 generations to find a hot deal that is affordable AND has a
-// positive projected owner CF. Returns null if none can be found — caller
-// should then NOT prepend a hot deal at all.
+// positive projected owner CF. Works for any property template (the caller
+// supplies the type drawn from the current tier's mix). Returns null when no
+// suitable hot deal is found — caller should then leave the original slot.
 function findAffordableHotDeal(template, difficulty, apr, cash) {
   const opts = {
     allowedConditionIds: ['good', 'excellent'],

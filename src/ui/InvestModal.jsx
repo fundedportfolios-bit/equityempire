@@ -183,7 +183,9 @@ export default function InvestModal({ onClose }) {
 
         <div className="modal-body">
           {options.length === 0 ? (
-            <p className="empty-state">No properties available yet. Grow your portfolio to unlock more types.</p>
+            <p className="empty-state">
+              No affordable properties this round — close and try again, or save up more cash.
+            </p>
           ) : (
             options.map(option => (
               <PropertyOption
