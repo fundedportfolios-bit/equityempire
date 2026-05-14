@@ -12,6 +12,10 @@ const firebaseConfig = {
   measurementId:     'G-J41B0P5L0L',
 }
 
+console.log('[Firebase] Initializing app with projectId:', firebaseConfig.projectId)
+
 const app = initializeApp(firebaseConfig)
 export const db   = getFirestore(app)
 export const auth = getAuth(app)
+
+console.log('[Firebase] App initialized. db:', !!db, '| auth:', !!auth)

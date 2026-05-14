@@ -111,9 +111,15 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   // Load cloud saves on mount
   useEffect(() => {
     if (!cloud) return
+    console.log('[SlotScreen] Loading cloud slots for uid:', user.id)
     getAllSlotsFromFirestore(user.id)
-      .then(s => { setSlots(s); setLoading(false) })
-      .catch(() => {
+      .then(s => {
+        console.log('[SlotScreen] Cloud slots loaded:', s.map((d, i) => d ? `slot ${i}: month ${d.state?.currentMonth}` : `slot ${i}: empty`))
+        setSlots(s)
+        setLoading(false)
+      })
+      .catch(e => {
+        console.error('[SlotScreen] Failed to load cloud slots:', e)
         setSlots(Array(SLOT_COUNT).fill(null))
         setLoading(false)
       })
@@ -127,9 +133,14 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
 
   async function handleDelete(i) {
     if (cloud) {
-      await deleteSlotFromFirestore(user.id, i)
-      const updated = await getAllSlotsFromFirestore(user.id)
-      setSlots(updated)
+      try {
+        await deleteSlotFromFirestore(user.id, i)
+        const updated = await getAllSlotsFromFirestore(user.id)
+        setSlots(updated)
+      } catch (e) {
+        console.error('[SlotScreen] Cloud delete failed:', e)
+        alert(`Cloud delete failed: ${e.message}\n\nCheck the console for details.`)
+      }
     } else {
       deleteSlot(user.id, i)
       setSlots(getAllSlots(user.id))

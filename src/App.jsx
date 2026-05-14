@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef }                  from 'react'
-import { GameProvider, useGame }                         from './core/gameState.js'
-import { startNewGame }                                  from './core/gameEngine.js'
+import { onAuthStateChanged }                           from 'firebase/auth'
+import { auth }                                         from './firebase/config.js'
+import { GameProvider, useGame }                        from './core/gameState.js'
+import { startNewGame }                                 from './core/gameEngine.js'
 import { getStoredUser, storeUser, clearStoredUser,
-         getSlot, setSlot }                              from './auth/saveSlots.js'
-import { loadSlotFromFirestore, saveSlotToFirestore }    from './firebase/firestoreService.js'
-import LoginScreen                                       from './ui/LoginScreen.jsx'
-import SlotScreen                                        from './ui/SlotScreen.jsx'
-import Dashboard                                         from './ui/Dashboard.jsx'
+         getSlot, setSlot }                             from './auth/saveSlots.js'
+import { loadSlotFromFirestore, saveSlotToFirestore }   from './firebase/firestoreService.js'
+import LoginScreen                                      from './ui/LoginScreen.jsx'
+import SlotScreen                                       from './ui/SlotScreen.jsx'
+import Dashboard                                        from './ui/Dashboard.jsx'
 
 const isCloudUser = (user) => user?.id && user.id !== 'guest'
 
@@ -22,20 +24,28 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
 
   // Auto-save refs
   const autoSaveTimerRef  = useRef(null)
-  const hasInitializedRef = useRef(false)   // skip the first trigger on mount
+  const hasInitializedRef = useRef(false)
 
   // ── Load / start game ────────────────────────────────────
   useEffect(() => {
     async function init() {
       const goal = cashFlowGoal || 10000
+      console.log('[GameInSlot] init —', { uid: user.id, slotIndex, isNew, cloud, difficulty, goal })
+
       if (isNew) {
         dispatch(startNewGame(difficulty || 'medium', goal))
       } else if (cloud) {
-        // Load from Firestore; fall back to startNewGame if empty
-        const slot = await loadSlotFromFirestore(user.id, slotIndex)
-        if (slot?.state) {
-          dispatch({ type: 'LOAD_GAME', payload: { savedState: slot.state, cashFlowGoal: goal } })
-        } else {
+        try {
+          const slot = await loadSlotFromFirestore(user.id, slotIndex)
+          if (slot?.state) {
+            console.log('[GameInSlot] Loaded cloud save for slot', slotIndex, '— currentMonth:', slot.state.currentMonth)
+            dispatch({ type: 'LOAD_GAME', payload: { savedState: slot.state, cashFlowGoal: goal } })
+          } else {
+            console.log('[GameInSlot] No cloud save found in slot', slotIndex, '— starting new game.')
+            dispatch(startNewGame(difficulty || 'medium', goal))
+          }
+        } catch (e) {
+          console.error('[GameInSlot] Cloud load failed — starting new game so play is not blocked. Error:', e)
           dispatch(startNewGame(difficulty || 'medium', goal))
         }
       } else {
@@ -53,27 +63,31 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-save on month advance or property acquisition ───
-  // state.currentMonth rises on ADVANCE_MONTH
-  // state.properties.length rises on BUY_PROPERTY
-  // We skip the very first fire (initialization) with hasInitializedRef.
   useEffect(() => {
     if (!ready || !cloud) return
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true
       return
     }
-    // Debounce: wait 800 ms in case multiple triggers fire in quick succession
     clearTimeout(autoSaveTimerRef.current)
     autoSaveTimerRef.current = setTimeout(() => {
-      saveSlotToFirestore(user.id, slotIndex, state).catch(console.error)
+      console.log('[GameInSlot] Auto-save triggered — month:', state.currentMonth, '| properties:', state.properties.length)
+      saveSlotToFirestore(user.id, slotIndex, state)
+        .catch(e => console.error('[GameInSlot] Auto-save failed:', e))
     }, 800)
     return () => clearTimeout(autoSaveTimerRef.current)
   }, [state.currentMonth, state.properties.length])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Manual save (Save button) ────────────────────────────
   async function handleSave() {
+    console.log('[GameInSlot] Manual save requested — cloud:', cloud, '| uid:', user.id)
     if (cloud) {
-      await saveSlotToFirestore(user.id, slotIndex, state)
+      try {
+        await saveSlotToFirestore(user.id, slotIndex, state)
+      } catch (e) {
+        console.error('[GameInSlot] Manual save failed:', e)
+        alert(`Cloud save failed: ${e.message}\n\nCheck the console for details.`)
+      }
     } else {
       setSlot(user.id, slotIndex, state)
     }
@@ -81,8 +95,13 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
 
   // ── Exit (saves first) ───────────────────────────────────
   async function handleExit() {
+    console.log('[GameInSlot] Exit requested — cloud:', cloud, '| uid:', user.id)
     if (cloud) {
-      await saveSlotToFirestore(user.id, slotIndex, state)
+      try {
+        await saveSlotToFirestore(user.id, slotIndex, state)
+      } catch (e) {
+        console.error('[GameInSlot] Save on exit failed:', e)
+      }
     } else {
       setSlot(user.id, slotIndex, state)
     }
@@ -99,22 +118,81 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
 }
 
 // ─── AppContent ────────────────────────────────────────────────────────────
+// On mount we wait for Firebase Auth to rehydrate (it's async after a page
+// reload). Only after onAuthStateChanged has fired at least once do we
+// commit to a user value and unblock the rest of the app — otherwise we'd
+// hit Firestore with auth.currentUser === null and get a rules denial.
 
 function AppContent() {
-  const [user,        setUser]       = useState(() => getStoredUser())
-  const [activeSlot,  setActiveSlot] = useState(null)
+  const [user,       setUser]      = useState(() => getStoredUser())
+  const [authReady,  setAuthReady] = useState(false)
+  const [activeSlot, setActiveSlot] = useState(null)
 
-  function handleLogin(firebaseUser) {
-    // Store minimal user info locally so the app remembers who is logged in on reload
-    storeUser(firebaseUser)
-    setUser(firebaseUser)
+  useEffect(() => {
+    console.log('[Auth] Subscribing to onAuthStateChanged. Initial stored user:', getStoredUser())
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      const stored = getStoredUser()
+      console.log('[Auth] onAuthStateChanged fired:', {
+        firebaseUser: firebaseUser ? {
+          uid:           firebaseUser.uid,
+          email:         firebaseUser.email,
+          displayName:   firebaseUser.displayName,
+          isAnonymous:   firebaseUser.isAnonymous,
+          emailVerified: firebaseUser.emailVerified,
+        } : null,
+        storedUser: stored,
+      })
+
+      if (firebaseUser) {
+        // Firebase confirms an authenticated user — use the Firebase UID.
+        const u = {
+          id:      firebaseUser.uid,
+          name:    firebaseUser.displayName ?? stored?.name ?? 'User',
+          email:   firebaseUser.email,
+          picture: firebaseUser.photoURL,
+        }
+        storeUser(u)
+        setUser(u)
+        console.log('[Auth] User set from Firebase Auth. uid =', u.id)
+      } else if (stored?.id === 'guest') {
+        // Guest mode — Firebase auth.currentUser will always be null here.
+        console.log('[Auth] No Firebase user; guest mode active.')
+        setUser(stored)
+      } else if (stored) {
+        // Had a stored signed-in user but Firebase Auth says nobody is
+        // logged in. The token expired or was revoked — clear the stale
+        // localStorage entry so the user gets the login screen.
+        console.warn('[Auth] Stored Firebase user but auth.currentUser is null — clearing stale session.')
+        clearStoredUser()
+        setUser(null)
+      } else {
+        setUser(null)
+      }
+      setAuthReady(true)
+    })
+    return unsub
+  }, [])
+
+  function handleLogin(loggedInUser) {
+    console.log('[Auth] handleLogin called with:', loggedInUser)
+    storeUser(loggedInUser)
+    setUser(loggedInUser)
   }
 
   function handleLogout() {
+    console.log('[Auth] handleLogout called')
     clearStoredUser()
     setUser(null)
     setActiveSlot(null)
   }
+
+  // Don't render UI until we know the Firebase Auth state — prevents
+  // making Firestore calls before currentUser is populated.
+  if (!authReady) return (
+    <div className="loading-screen">
+      <p className="loading-text">Restoring session…</p>
+    </div>
+  )
 
   if (!user)       return <LoginScreen onLogin={handleLogin} />
   if (!activeSlot) return (
