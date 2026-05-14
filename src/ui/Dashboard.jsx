@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGame } from '../core/gameState.js'
 import { setModalOpen, toggleTrivia, openInvestModal } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
+import { auth } from '../firebase/config.js'
 import PortfolioSummary from './PortfolioSummary.jsx'
 import AlertsPanel from './AlertsPanel.jsx'
 import PropertyList from './PropertyList.jsx'
@@ -17,7 +18,46 @@ import WinModal from './WinModal.jsx'
 import MilestoneModal from './MilestoneModal.jsx'
 import ReportModal from './ReportModal.jsx'
 
-export default function Dashboard({ onSave, onExit }) {
+// ─── FirebaseDebugPanel ────────────────────────────────────
+function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite }) {
+  const [open, setOpen] = useState(false)
+  const cu = auth.currentUser
+
+  return (
+    <div className="debug-panel">
+      <button className="debug-panel-toggle" onClick={() => setOpen(o => !o)}>
+        🛠 Firebase Debug {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div className="debug-panel-body">
+          <div className="debug-row"><span className="debug-key">Auth Status</span><span className="debug-val">{cu ? `✅ Signed in` : '❌ No auth.currentUser'}</span></div>
+          <div className="debug-row"><span className="debug-key">Firebase UID (auth)</span><span className="debug-val debug-mono">{cu?.uid ?? '—'}</span></div>
+          <div className="debug-row"><span className="debug-key">User ID (app)</span><span className="debug-val debug-mono">{user?.id ?? '—'}</span></div>
+          <div className="debug-row"><span className="debug-key">UID Match</span><span className="debug-val">{cu?.uid === user?.id ? '✅ match' : `⚠ MISMATCH (auth=${cu?.uid ?? 'null'} app=${user?.id})`}</span></div>
+          <div className="debug-row"><span className="debug-key">Save Mode</span><span className="debug-val">{debugInfo.saveMode}</span></div>
+          <div className="debug-row"><span className="debug-key">Selected Slot</span><span className="debug-val">{slotIndex ?? debugInfo.slot}</span></div>
+          <div className="debug-row"><span className="debug-key">Firestore Path</span><span className="debug-val debug-mono">{debugInfo.lastPath ?? `users/${user?.id}/saveSlots/slot_${slotIndex}`}</span></div>
+          <div className="debug-row"><span className="debug-key">Last Save Attempt</span><span className="debug-val">{debugInfo.lastAttempt ?? '—'}</span></div>
+          <div className="debug-row"><span className="debug-key">Last Save Result</span><span className="debug-val">{debugInfo.lastResult ?? '—'}</span></div>
+          {debugInfo.lastError && (
+            <div className="debug-row debug-row--error"><span className="debug-key">Last Error</span><span className="debug-val debug-mono">{debugInfo.lastError}</span></div>
+          )}
+          {onTestWrite && (
+            <button className="debug-test-btn" onClick={onTestWrite}>
+              Test Cloud Write
+            </button>
+          )}
+          {!onTestWrite && (
+            <p className="debug-note">Guest mode — using localStorage only</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Dashboard ─────────────────────────────────────────────
+export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, onTestWrite }) {
   const { state, dispatch } = useGame()
   const [activeModal,  setActiveModal]  = useState(null)
   const [winDismissed, setWinDismissed] = useState(false)
@@ -118,6 +158,15 @@ export default function Dashboard({ onSave, onExit }) {
       )}
       {reportOpen && (
         <ReportModal onClose={() => { dispatch(setModalOpen(false)); setReportOpen(false) }} />
+      )}
+
+      {debugInfo && (
+        <FirebaseDebugPanel
+          user={user}
+          slotIndex={slotIndex}
+          debugInfo={debugInfo}
+          onTestWrite={onTestWrite}
+        />
       )}
     </div>
   )

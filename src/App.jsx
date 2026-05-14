@@ -5,7 +5,8 @@ import { GameProvider, useGame }                        from './core/gameState.j
 import { startNewGame }                                 from './core/gameEngine.js'
 import { getStoredUser, storeUser, clearStoredUser,
          getSlot, setSlot }                             from './auth/saveSlots.js'
-import { loadSlotFromFirestore, saveSlotToFirestore }   from './firebase/firestoreService.js'
+import { loadSlotFromFirestore, saveSlotToFirestore,
+         testCloudWriteToFirestore }                    from './firebase/firestoreService.js'
 import LoginScreen                                      from './ui/LoginScreen.jsx'
 import SlotScreen                                       from './ui/SlotScreen.jsx'
 import Dashboard                                        from './ui/Dashboard.jsx'
@@ -21,6 +22,17 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
   const { state, dispatch } = useGame()
   const [ready, setReady]   = useState(false)
   const cloud               = isCloudUser(user)
+
+  // Debug panel state
+  const [debugInfo, setDebugInfo] = useState({
+    saveMode:    cloud ? 'Firestore' : 'localStorage',
+    uid:         user.id,
+    slot:        slotIndex,
+    lastAttempt: null,
+    lastResult:  null,
+    lastError:   null,
+    lastPath:    null,
+  })
 
   // Auto-save refs
   const autoSaveTimerRef  = useRef(null)
@@ -80,32 +92,54 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
 
   // ── Manual save (Save button) ────────────────────────────
   async function handleSave() {
+    const path = cloud ? `users/${user.id}/saveSlots/slot_${slotIndex}` : 'localStorage'
     console.log('[GameInSlot] Manual save requested — cloud:', cloud, '| uid:', user.id)
+    setDebugInfo(prev => ({ ...prev, lastAttempt: new Date().toISOString(), lastPath: path, lastError: null }))
     if (cloud) {
       try {
         await saveSlotToFirestore(user.id, slotIndex, state)
+        setDebugInfo(prev => ({ ...prev, lastResult: '✅ SUCCESS' }))
       } catch (e) {
         console.error('[GameInSlot] Manual save failed:', e)
+        setDebugInfo(prev => ({ ...prev, lastResult: '❌ FAILED', lastError: `${e.code ?? 'error'}: ${e.message}` }))
         alert(`Cloud save failed: ${e.message}\n\nCheck the console for details.`)
       }
     } else {
       setSlot(user.id, slotIndex, state)
+      setDebugInfo(prev => ({ ...prev, lastResult: '✅ localStorage OK' }))
     }
   }
 
   // ── Exit (saves first) ───────────────────────────────────
   async function handleExit() {
+    const path = cloud ? `users/${user.id}/saveSlots/slot_${slotIndex}` : 'localStorage'
     console.log('[GameInSlot] Exit requested — cloud:', cloud, '| uid:', user.id)
+    setDebugInfo(prev => ({ ...prev, lastAttempt: new Date().toISOString(), lastPath: path, lastError: null }))
     if (cloud) {
       try {
         await saveSlotToFirestore(user.id, slotIndex, state)
+        setDebugInfo(prev => ({ ...prev, lastResult: '✅ SUCCESS (on exit)' }))
       } catch (e) {
         console.error('[GameInSlot] Save on exit failed:', e)
+        setDebugInfo(prev => ({ ...prev, lastResult: '❌ FAILED (on exit)', lastError: `${e.code ?? 'error'}: ${e.message}` }))
       }
     } else {
       setSlot(user.id, slotIndex, state)
     }
     onExit()
+  }
+
+  // ── Test cloud write (debug) ─────────────────────────────
+  async function handleTestWrite() {
+    const path = `users/${user.id}/debug/testWrite`
+    console.log('[GameInSlot] Test cloud write — uid:', user.id)
+    setDebugInfo(prev => ({ ...prev, lastAttempt: new Date().toISOString(), lastPath: path, lastError: null, lastResult: '⏳ writing…' }))
+    try {
+      const result = await testCloudWriteToFirestore(user.id)
+      setDebugInfo(prev => ({ ...prev, lastResult: `✅ TEST SUCCESS → ${result.path}` }))
+    } catch (e) {
+      setDebugInfo(prev => ({ ...prev, lastResult: '❌ TEST FAILED', lastError: `${e.code ?? 'error'}: ${e.message}` }))
+    }
   }
 
   if (!ready || !state.gameStarted) return (
@@ -114,7 +148,16 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
     </div>
   )
 
-  return <Dashboard onSave={handleSave} onExit={handleExit} slotIndex={slotIndex} />
+  return (
+    <Dashboard
+      onSave={handleSave}
+      onExit={handleExit}
+      slotIndex={slotIndex}
+      user={user}
+      debugInfo={debugInfo}
+      onTestWrite={cloud ? handleTestWrite : null}
+    />
+  )
 }
 
 // ─── AppContent ────────────────────────────────────────────────────────────

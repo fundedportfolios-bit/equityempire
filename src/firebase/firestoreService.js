@@ -10,8 +10,8 @@
 // Errors are RE-THROWN so the caller can surface them. They are never
 // silently swallowed.
 
-import { db, auth }                       from './config.js'
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
+import { db, auth }                                          from './config.js'
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp }   from 'firebase/firestore'
 
 const SLOT_COUNT = 3
 
@@ -127,6 +127,31 @@ export async function deleteSlotFromFirestore(uid, slotIndex) {
     console.log(`[Firestore.${op}] SUCCESS — deleted`, path)
   } catch (e) {
     console.error(`[Firestore.${op}] FAILED at`, path, '| code:', e.code, '| message:', e.message, '| full error:', e)
+    throw e
+  }
+}
+
+// ─── Test write (debug only) ────────────────────────────────────────────
+export async function testCloudWriteToFirestore(uid) {
+  const op   = 'testWrite'
+  const path = `users/${uid}/debug/testWrite`
+  console.log(`[Firestore.${op}] TEST WRITE —`, { uid, path })
+
+  try {
+    const authedUid = assertAuthAndUid(uid, op)
+    const ref       = doc(db, 'users', authedUid, 'debug', 'testWrite')
+    const payload   = {
+      message:    'Cloud write test',
+      createdAt:  serverTimestamp(),
+      projectId:  'equity-empire-2026',
+      testedAt:   new Date().toISOString(),
+    }
+    await setDoc(ref, payload)
+    const confirmedPath = `users/${authedUid}/debug/testWrite`
+    console.log(`[Firestore.${op}] SUCCESS — wrote`, confirmedPath)
+    return { success: true, path: confirmedPath }
+  } catch (e) {
+    console.error(`[Firestore.${op}] FAILED | code:`, e.code, '| message:', e.message, '| full error:', e)
     throw e
   }
 }
