@@ -2120,6 +2120,120 @@ body {
 .refi-picker-btn { width: 100%; }
 .refi-picker-btn:disabled { background: var(--bg-elevated); color: var(--text-muted); border-color: var(--border); cursor: default; }
 
+/* ─── Batch Refinance Mode ─────────────────────────────────────── */
+.refi-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.refi-batch-toggle-btn {
+  white-space: nowrap;
+}
+
+.refi-picker-card--batch {
+  padding: 12px;
+  cursor: default;
+}
+.refi-picker-card--checked {
+  border-color: #38bdf8;
+  background: rgba(56,189,248,0.05);
+}
+
+.refi-batch-row-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.refi-batch-checkbox {
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: transparent;
+  flex-shrink: 0;
+}
+.refi-batch-checkbox--on {
+  background: #38bdf8;
+  border-color: #38bdf8;
+  color: #fff;
+}
+
+.refi-batch-tier-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.refi-batch-tier-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.refi-batch-tier-btn:not(:disabled):hover {
+  border-color: #38bdf8;
+}
+.refi-batch-tier-btn--active {
+  border-color: #38bdf8;
+  background: rgba(56,189,248,0.12);
+  color: #38bdf8;
+}
+.refi-batch-tier-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.refi-batch-tier-label {
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.refi-batch-tier-cash {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.refi-batch-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 16px -16px -16px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  z-index: 1;
+}
+.refi-batch-summary {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.refi-batch-summary strong { color: var(--text); }
+.refi-batch-summary strong.positive { color: #22c55e; }
+.refi-batch-confirm-btn {
+  min-width: 180px;
+  white-space: nowrap;
+}
+
 /* ─── Slot screen — Cash Flow Goal ───────────────────────────── */
 .slot-goal-row {
   display: flex;

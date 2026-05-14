@@ -422,6 +422,44 @@ export function gameReducer(state, action) {
       }
     }
 
+    case 'REFINANCE_BATCH': {
+      const { refis } = action.payload
+      if (!refis?.length) return state
+
+      const byId = new Map(refis.map(r => [r.propertyId, r]))
+      const refiProps = state.properties.map(p => {
+        const r = byId.get(p.id)
+        if (!r) return p
+        return {
+          ...p,
+          loanBalance:        r.newLoanBalance,
+          monthlyDebtService: r.newMonthlyDebtService,
+          monthlyExpenses:    r.newMonthlyExpenses,
+        }
+      })
+
+      const totals    = recalculatePortfolioTotals(refiProps, state.currentMonth)
+      const totalCash = refis.reduce((s, r) => s + (r.netCash || 0), 0)
+      const propCount = refis.length
+      const batchAlert = {
+        id:        `batch-refi-${Date.now()}`,
+        message:   `Batch refinanced ${propCount} propert${propCount === 1 ? 'y' : 'ies'} — received $${totalCash.toLocaleString()} cash.`,
+        type:      'success',
+        timestamp: state.currentMonth,
+      }
+
+      return {
+        ...state,
+        properties:      refiProps,
+        cash:            state.cash + totalCash,
+        portfolioValue:  totals.portfolioValue,
+        totalDebt:       totals.totalDebt,
+        monthlyIncome:   totals.monthlyIncome,
+        monthlyExpenses: totals.monthlyExpenses,
+        alerts:          [batchAlert, ...state.alerts].slice(0, 20),
+      }
+    }
+
     case 'CLOSE_TRIVIA': {
       const { reward, dismissed } = action.payload
       const newAlerts = dismissed

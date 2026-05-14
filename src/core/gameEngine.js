@@ -95,6 +95,11 @@ export function refinanceProperty(propertyId, refiData) {
   return { type: 'REFINANCE_PROPERTY', payload: { propertyId, ...refiData } }
 }
 
+export function refinanceBatch(refis) {
+  // refis: Array<{ propertyId, netCash, newLoanBalance, newMonthlyDebtService, newMonthlyExpenses }>
+  return { type: 'REFINANCE_BATCH', payload: { refis } }
+}
+
 export function hireStaff() {
   return { type: 'HIRE_STAFF' }
 }
