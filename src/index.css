@@ -1121,8 +1121,11 @@ body {
   .action-badge { display: none; }
 }
 
-/* Staff icon light blue */
-.action-btn--staff .action-icon { filter: hue-rotate(180deg) saturate(3.5) brightness(1.5); }
+/* Staff icon light blue (same filter recipe as .ptb-staff) */
+.action-btn--staff .action-icon {
+  filter: brightness(0) saturate(100%) invert(72%) sepia(31%) saturate(2056%)
+          hue-rotate(176deg) brightness(99%) contrast(91%);
+}
 .action-btn--staff .action-label { color: #38bdf8; }
 
 /* Trivia toggle button */
@@ -1912,7 +1915,13 @@ body {
   border-left: 1px solid rgba(255,255,255,0.1);
   flex-shrink: 0;
 }
-.ptb-staff .ptc-icon  { filter: hue-rotate(180deg) saturate(3.5) brightness(1.4); }
+/* Colorize the 👤 emoji silhouette → light blue (#38bdf8). The filter chain
+   converts any source color to a specific hex by zeroing brightness first
+   then layering invert/sepia/hue-rotate to land on the target. */
+.ptb-staff .ptc-icon  {
+  filter: brightness(0) saturate(100%) invert(72%) sepia(31%) saturate(2056%)
+          hue-rotate(176deg) brightness(99%) contrast(91%);
+}
 .ptb-staff .ptc-count { color: #38bdf8; }
 
 .property-type-chip {
