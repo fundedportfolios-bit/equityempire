@@ -874,6 +874,11 @@ body {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
   margin-bottom: 12px;
 }
 
@@ -912,6 +917,8 @@ body {
 .refi-confirm-btn { width: 100%; margin-top: 4px; }
 .refi-sell-note { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4; }
 .seasoning-note { font-size: 12px; color: var(--text-dim); font-style: italic; }
+.refi-card-meta { font-size: 10px; font-weight: 500; color: var(--text-dim); }
+.refi-dscr-note { font-size: 11px; color: var(--warning); font-style: italic; margin-top: 4px; }
 
 /* ─── Action panel ────────────────────────────────────────────── */
 .action-panel {

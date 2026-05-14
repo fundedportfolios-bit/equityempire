@@ -3,7 +3,7 @@ import { useGame } from '../core/gameState.js'
 import { advanceMonth, setPaused } from '../core/gameEngine.js'
 import { formatMonthLabel } from '../core/timeSystem.js'
 import { countAffordableTypes } from '../systems/propertySystem.js'
-import { canRefinance, calcRefiOption } from '../systems/loanSystem.js'
+import { getMaxRefiNetCash } from '../systems/loanSystem.js'
 import { calcCurrentStaffCost } from '../systems/staffSystem.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatShort } from '../utils/formatters.js'
@@ -123,9 +123,9 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
 
   const refiPotential = useMemo(
     () => state.properties
-      .filter(p => canRefinance(p))
-      .reduce((sum, p) => sum + calcRefiOption(p, 1.0).netCash, 0),
-    [state.properties]
+      .reduce((sum, p) => sum + getMaxRefiNetCash(p, state), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.properties, state.marketInterestRate]
   )
 
   const staffCostPerHire = calcCurrentStaffCost(state.currentMonth)

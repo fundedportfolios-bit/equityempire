@@ -1,8 +1,7 @@
 import { useGame } from '../core/gameState.js'
 import { sellProperty, refinanceProperty } from '../core/gameEngine.js'
-import { calcRefiOption, calcSaleProceeds, canRefinance, canFullRefinance, getMaxRefiCash } from '../systems/loanSystem.js'
+import { calculateRefinanceOptions, calcSaleProceeds, getMaxRefiNetCash } from '../systems/loanSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
-import { REFI_RULES } from '../data/loanRules.js'
 
 function DeltaValue({ value }) {
   if (value === 0) return <span className="cash-flow-delta neutral">No change</span>
@@ -14,12 +13,17 @@ function DeltaValue({ value }) {
   )
 }
 
-function RefiCard({ label, option, seasoned, onConfirm }) {
-  const isDisabled = !seasoned
+function RefiCard({ option, onConfirm }) {
+  const disabled = !option.isAvailable
 
   return (
-    <div className={`refi-option-card${isDisabled ? ' refi-option-card--disabled' : ''}`}>
-      <div className="refi-card-title">{label}</div>
+    <div className={`refi-option-card${disabled ? ' refi-option-card--disabled' : ''}`}>
+      <div className="refi-card-title">
+        {option.tierLabel}
+        <span className="refi-card-meta">
+          {Math.round(option.maxLTV * 100)}% LTV · {option.targetDSCR.toFixed(2)}× DSCR
+        </span>
+      </div>
 
       <div className="refi-detail-rows">
         <div className="refi-detail-row">
@@ -27,12 +31,12 @@ function RefiCard({ label, option, seasoned, onConfirm }) {
           <span>{formatCurrency(option.grossCashOut)}</span>
         </div>
         <div className="refi-detail-row">
-          <span>Closing costs (4%)</span>
+          <span>Closing costs ({(option.closingCostPercent * 100).toFixed(1)}%)</span>
           <span className="negative">−{formatCurrency(option.closingCosts)}</span>
         </div>
         <div className="refi-detail-row refi-detail-row--highlight">
           <span>Net cash received</span>
-          <span className="positive">{formatCurrency(option.netCash)}</span>
+          <span className="positive">{formatCurrency(option.netCashToOwner)}</span>
         </div>
         <div className="refi-detail-row">
           <span>New loan balance</span>
@@ -56,15 +60,16 @@ function RefiCard({ label, option, seasoned, onConfirm }) {
         <div className="refi-effect-delta">
           <DeltaValue value={option.cashFlowDelta} />
         </div>
+        {option.dscrConstraintActive && option.isSeasoned && (
+          <p className="refi-dscr-note">DSCR constraint limits this option</p>
+        )}
       </div>
 
-      {isDisabled ? (
-        <p className="seasoning-note">Seasoning required — not yet eligible</p>
-      ) : option.netCash <= 0 ? (
-        <p className="seasoning-note">No cash available after closing costs</p>
+      {disabled ? (
+        <p className="seasoning-note">{option.unavailableReason}</p>
       ) : (
         <button className="btn btn-primary btn-sm refi-confirm-btn" onClick={onConfirm}>
-          Confirm — receive {formatCurrency(option.netCash)}
+          Confirm — receive {formatCurrency(option.netCashToOwner)}
         </button>
       )}
     </div>
@@ -117,25 +122,24 @@ export default function SellRefiModal({ propertyId, onClose }) {
   const property = state.properties.find(p => p.id === propertyId)
   if (!property) return null
 
-  const seasoned        = canRefinance(property)
-  const fullySeasoned   = canFullRefinance(property)
-  const maxRefiCash     = getMaxRefiCash(property)
-  const monthsOwned     = property.monthsOwned || 0
-  const monthsToLowRef  = Math.max(0, REFI_RULES.seasoningMonths - monthsOwned)
-  const monthsToFullRef = Math.max(0, REFI_RULES.maxRefiSeasoningMonths - monthsOwned)
-  const equity          = property.currentValue - property.loanBalance
+  // ── Shared refinance calculation (single source of truth) ──
+  const refiOptions  = calculateRefinanceOptions(property, state)
+  const maxNetCash   = getMaxRefiNetCash(property, state)
+  const equity       = property.currentValue - property.loanBalance
+  const monthsOwned  = property.monthsOwned || 0
 
-  const refiRate      = (state.marketInterestRate ?? 0.0678) + 0.012
-  const lowRiskOption = calcRefiOption(property, 0.5, refiRate)
-  const maxOption     = calcRefiOption(property, 1.0, refiRate)
-  const saleData      = calcSaleProceeds(property)
+  const lowRisk  = refiOptions[0]  // Low Risk
+  const standard = refiOptions[1]  // Standard Cash-Out
+  const maxOpt   = refiOptions[2]  // Max Cash-Out
+
+  const saleData = calcSaleProceeds(property)
 
   function handleRefi(option) {
     dispatch(refinanceProperty(propertyId, {
-      netCash:              option.netCash,
-      newLoanBalance:       option.newLoanBalance,
+      netCash:               option.netCashToOwner,
+      newLoanBalance:        option.newLoanBalance,
       newMonthlyDebtService: option.newMonthlyDebtService,
-      newMonthlyExpenses:   option.newMonthlyExpenses,
+      newMonthlyExpenses:    option.newMonthlyExpenses,
     }))
     onClose()
   }
@@ -149,10 +153,11 @@ export default function SellRefiModal({ propertyId, onClose }) {
     if (e.target === e.currentTarget) onClose()
   }
 
-  // Determine which seasoning banner to show
-  const showNoBanner   = seasoned && fullySeasoned
-  const showMidBanner  = seasoned && !fullySeasoned
-  const showEarlyBanner = !seasoned
+  // ── Seasoning banner logic ──────────────────────────────────
+  const anyAvailable = refiOptions.some(o => o.isSeasoned)
+  const allAvailable = refiOptions.every(o => o.isSeasoned)
+  const monthsToLow  = Math.max(0, 6 - monthsOwned)
+  const monthsToFull = Math.max(0, 12 - monthsOwned)
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -189,39 +194,30 @@ export default function SellRefiModal({ propertyId, onClose }) {
               <span className="sellrefi-stat-value">{monthsOwned}</span>
             </div>
             <div className="sellrefi-stat">
-              <span className="sellrefi-stat-label">Max Refi Cash</span>
-              <span className="sellrefi-stat-value">{formatCurrency(maxRefiCash)}</span>
+              <span className="sellrefi-stat-label">Max Refi $</span>
+              <span className="sellrefi-stat-value">{formatCurrency(maxNetCash)}</span>
             </div>
           </div>
 
           {/* Seasoning banner */}
-          {showEarlyBanner && (
+          {!anyAvailable && (
             <div className="seasoning-banner">
-              ⏳ Low Risk refi available after {REFI_RULES.seasoningMonths} months
-              ({monthsToLowRef} month{monthsToLowRef !== 1 ? 's' : ''} remaining)
+              ⏳ Low Risk refi available after 6 months
+              ({monthsToLow} month{monthsToLow !== 1 ? 's' : ''} remaining)
             </div>
           )}
-          {showMidBanner && (
+          {anyAvailable && !allAvailable && (
             <div className="seasoning-banner seasoning-banner--partial">
-              ✓ Low Risk refi available &nbsp;·&nbsp; Max refi unlocks at {REFI_RULES.maxRefiSeasoningMonths} months
-              ({monthsToFullRef} month{monthsToFullRef !== 1 ? 's' : ''} remaining)
+              ✓ Low Risk refi available &nbsp;·&nbsp; Standard & Max unlock at 12 months
+              ({monthsToFull} month{monthsToFull !== 1 ? 's' : ''} remaining)
             </div>
           )}
 
           <section className="manage-section">
             <h3 className="manage-section-title">Refinance Options</h3>
-            <RefiCard
-              label="Refinance — Low Risk (50%)"
-              option={lowRiskOption}
-              seasoned={seasoned}
-              onConfirm={() => handleRefi(lowRiskOption)}
-            />
-            <RefiCard
-              label="Refinance — Max (100%)"
-              option={maxOption}
-              seasoned={fullySeasoned}
-              onConfirm={() => handleRefi(maxOption)}
-            />
+            <RefiCard option={lowRisk}  onConfirm={() => handleRefi(lowRisk)} />
+            <RefiCard option={standard} onConfirm={() => handleRefi(standard)} />
+            <RefiCard option={maxOpt}   onConfirm={() => handleRefi(maxOpt)} />
           </section>
 
           <section className="manage-section">

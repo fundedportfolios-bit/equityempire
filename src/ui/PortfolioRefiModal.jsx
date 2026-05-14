@@ -1,21 +1,21 @@
 import { useGame } from '../core/gameState.js'
-import { canRefinance, canFullRefinance, getMaxRefiCash } from '../systems/loanSystem.js'
-import { REFI_RULES } from '../data/loanRules.js'
+import { calculateRefinanceOptions, getMaxRefiNetCash } from '../systems/loanSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
 
-function eligibilityLabel(property) {
-  if (canFullRefinance(property)) return { text: 'Max refi eligible', cls: 'refi-elig refi-elig--full' }
-  if (canRefinance(property))     return { text: 'Low Risk eligible',  cls: 'refi-elig refi-elig--low'  }
+function eligibilityLabel(property, state) {
+  const options = calculateRefinanceOptions(property, state)
+  if (options.every(o => o.isSeasoned))  return { text: 'All tiers eligible', cls: 'refi-elig refi-elig--full' }
+  if (options.some(o => o.isSeasoned))   return { text: 'Low Risk eligible',  cls: 'refi-elig refi-elig--low'  }
   const months = property.monthsOwned || 0
-  const remaining = REFI_RULES.seasoningMonths - months
+  const remaining = Math.max(0, 6 - months)
   return { text: `Eligible in ${remaining} mo`, cls: 'refi-elig refi-elig--none' }
 }
 
-function RefiPropertyCard({ property, refiRate, onSelect }) {
+function RefiPropertyCard({ property, state, onSelect }) {
   const equity    = property.currentValue - property.loanBalance
-  const maxCash   = getMaxRefiCash(property)
-  const elig      = eligibilityLabel(property)
-  const canRefi   = canRefinance(property) && maxCash > 0
+  const maxCash   = getMaxRefiNetCash(property, state)
+  const elig      = eligibilityLabel(property, state)
+  const canRefi   = maxCash > 0
 
   return (
     <div className={`refi-picker-card${canRefi ? '' : ' refi-picker-card--ineligible'}`}>
@@ -96,7 +96,7 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
               <RefiPropertyCard
                 key={property.id}
                 property={property}
-                refiRate={refiRate}
+                state={state}
                 onSelect={() => onSelectProperty(property.id)}
               />
             ))

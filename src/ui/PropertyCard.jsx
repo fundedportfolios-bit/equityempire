@@ -1,6 +1,6 @@
 import { formatShort, formatCashFlow, formatCurrency } from '../utils/formatters.js'
 import { calculateNetCashFlow } from '../utils/financeMath.js'
-import { getMaxRefiCash } from '../systems/loanSystem.js'
+import { getMaxRefiNetCash } from '../systems/loanSystem.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { useGame } from '../core/gameState.js'
 
@@ -8,7 +8,7 @@ export default function PropertyCard({ property, onUpgrade, onSellRefi }) {
   const { state }     = useGame()
   const netCashFlow   = calculateNetCashFlow(property.monthlyRent, property.monthlyExpenses)
   const equity        = property.currentValue - property.loanBalance
-  const maxRefiCash   = getMaxRefiCash(property)
+  const maxRefiCash   = getMaxRefiNetCash(property, state)
   const units         = property.units ?? 1
   const affordableUpgradeCount = getAvailableUpgrades(property).filter(t =>
     ((t.baseCost || 0) + (t.unitCostFactor || 0) * units) <= state.cash
