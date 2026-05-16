@@ -29,7 +29,7 @@ function PropertyTypeBar({ properties, state }) {
   const totalStaff  = getTotalStaffCount(state)
   if (entries.length === 0 && totalStaff === 0) return null
   return (
-    <div className="property-type-bar">
+    <div className="property-type-bar" data-tutorial="property-staff-icons">
       <div className="ptb-icons">
         {entries.map(([key, { count, emoji, image, templateId }]) => (
           <div key={key} className="property-type-chip">
@@ -72,7 +72,7 @@ function CoverageStatusRow({ state }) {
     }
   })()
   return (
-    <div className={`coverage-row ${cls}`}>
+    <div className={`coverage-row ${cls}`} data-tutorial="coverage-status">
       <span className="coverage-row-label">Coverage</span>
       <span className="coverage-row-value">{pct}</span>
       <span className="coverage-row-status">{status}</span>
@@ -102,7 +102,7 @@ export default function PortfolioSummary() {
   return (
     <section className="portfolio-summary">
       {/* ── Row 1 + 2: named DASHBOARD ─────────────────────── */}
-      <div className="stats-block">
+      <div className="stats-block" data-tutorial="dashboard-summary">
         <span className="stats-section-label">DASHBOARD</span>
         <div className="stats-strip">
           <StatCard label="Cash"   value={formatShort(state.cash)} />

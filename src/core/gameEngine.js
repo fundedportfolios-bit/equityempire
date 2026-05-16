@@ -138,6 +138,10 @@ export function dismissWin() {
   return { type: 'DISMISS_WIN' }
 }
 
+export function markTutorialSeen() {
+  return { type: 'MARK_TUTORIAL_SEEN' }
+}
+
 // Placeholder — will grow as win/loss conditions are defined
 export function checkWinLoss(state) {
   if (state.cash < 0 && state.monthlyIncome === 0) return 'loss'

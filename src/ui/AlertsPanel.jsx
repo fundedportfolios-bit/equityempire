@@ -52,7 +52,7 @@ export default function AlertsPanel() {
 
   if (rows.length === 0) {
     return (
-      <section className="alerts-panel">
+      <section className="alerts-panel" data-tutorial="maintenance-issues">
         <h2 className="section-title">Manage</h2>
         <p className="empty-state">No active issues — you're in good shape.</p>
       </section>

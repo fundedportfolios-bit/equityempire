@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useGame } from '../core/gameState.js'
-import { setModalOpen, toggleTrivia, openInvestModal, dismissWin } from '../core/gameEngine.js'
+import { setModalOpen, toggleTrivia, openInvestModal, dismissWin, markTutorialSeen } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
 import { auth } from '../firebase/config.js'
 import PortfolioSummary from './PortfolioSummary.jsx'
@@ -17,6 +17,7 @@ import TriviaModal from './TriviaModal.jsx'
 import WinModal from './WinModal.jsx'
 import MilestoneModal from './MilestoneModal.jsx'
 import ReportModal from './ReportModal.jsx'
+import TutorialOverlay from './TutorialOverlay.jsx'
 
 // ─── FirebaseDebugPanel ────────────────────────────────────
 function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite }) {
@@ -59,11 +60,37 @@ function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite }) {
 // ─── Dashboard ─────────────────────────────────────────────
 export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, onTestWrite }) {
   const { state, dispatch } = useGame()
-  const [activeModal,  setActiveModal]  = useState(null)
-  const [winDismissed, setWinDismissed] = useState(false)
-  const [reportOpen,   setReportOpen]   = useState(false)
+  const [activeModal,    setActiveModal]    = useState(null)
+  const [winDismissed,   setWinDismissed]   = useState(false)
+  const [reportOpen,     setReportOpen]     = useState(false)
+  const [tutorialOpen,   setTutorialOpen]   = useState(false)
+  const [tutorialAuto,   setTutorialAuto]   = useState(false)  // distinguishes auto-launch from manual ? click
 
   useMarketRate(dispatch)
+
+  // Auto-launch the tutorial on the first render of a brand-new game
+  // (i.e. when state.tutorialSeen is false). Loading a saved game where it's
+  // already true skips this. Pauses the speed timer via setModalOpen.
+  useEffect(() => {
+    if (!state.tutorialSeen && !tutorialOpen) {
+      setTutorialAuto(true)
+      setTutorialOpen(true)
+      dispatch(setModalOpen(true))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function openTutorialManual() {
+    setTutorialAuto(false)
+    setTutorialOpen(true)
+    dispatch(setModalOpen(true))
+  }
+
+  function closeTutorial(seen) {
+    setTutorialOpen(false)
+    if (seen && !state.tutorialSeen) dispatch(markTutorialSeen())
+    dispatch(setModalOpen(false))
+  }
 
   function openModal(config) {
     dispatch(setModalOpen(true))
@@ -80,6 +107,14 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       <header className="dashboard-header">
         <h1 className="game-title">Equity Empire<span className="game-version">v4.0</span></h1>
         <div className="dashboard-header-actions">
+          <button
+            className="hdr-btn"
+            onClick={openTutorialManual}
+            aria-label="Help / Tutorial"
+            title="Replay tutorial"
+          >
+            <span className="hdr-btn-icon">?</span>
+          </button>
           <button
             className="hdr-btn"
             onClick={() => { dispatch(setModalOpen(true)); setReportOpen(true) }}
@@ -158,6 +193,9 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       )}
       {reportOpen && (
         <ReportModal onClose={() => { dispatch(setModalOpen(false)); setReportOpen(false) }} />
+      )}
+      {tutorialOpen && (
+        <TutorialOverlay onClose={closeTutorial} showWelcome={tutorialAuto || true} />
       )}
 
       {debugInfo && (

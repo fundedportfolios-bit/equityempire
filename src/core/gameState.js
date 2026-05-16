@@ -67,6 +67,7 @@ export const INITIAL_STATE = {
   gameStarted: false,
   gameOver: false,
   winner: false,
+  tutorialSeen: false,  // set true after first completion/skip; persists with save
 
   // Invest modal tracking
   investOpenCount: 0,
@@ -734,6 +735,9 @@ export function gameReducer(state, action) {
 
     case 'TOGGLE_TRIVIA':
       return { ...state, triviaEnabled: !state.triviaEnabled }
+
+    case 'MARK_TUTORIAL_SEEN':
+      return { ...state, tutorialSeen: true }
 
     default:
       return state

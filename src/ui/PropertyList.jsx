@@ -5,7 +5,7 @@ export default function PropertyList({ onUpgrade, onSellRefi }) {
   const { state } = useGame()
 
   return (
-    <section className="property-list">
+    <section className="property-list" data-tutorial="portfolio-list">
       <h2 className="section-title">
         Portfolio
         {state.properties.length > 0 && (

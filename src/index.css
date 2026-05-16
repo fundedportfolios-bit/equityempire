@@ -2413,6 +2413,88 @@ body {
   white-space: nowrap;
 }
 
+/* ─── Tutorial overlay ───────────────────────────────────────── */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: auto;
+}
+.tutorial-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  pointer-events: auto;
+}
+.tutorial-highlight {
+  position: fixed;
+  border: 2px solid #38bdf8;
+  border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(56,189,248,0.15), 0 0 24px rgba(56,189,248,0.35);
+  pointer-events: none;
+  transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease;
+}
+.tutorial-card {
+  position: fixed;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 18px 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  max-width: 90vw;
+  z-index: 1;
+}
+.tutorial-card--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, 90vw);
+}
+.tutorial-step-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #38bdf8;
+  margin-bottom: 6px;
+}
+.tutorial-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+.tutorial-body {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.tutorial-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.tutorial-btn {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.tutorial-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .tutorial-card { padding: 14px 14px 12px; }
+  .tutorial-title { font-size: 1.05rem; }
+  .tutorial-body { font-size: 0.85rem; }
+  .tutorial-btn { padding: 8px 10px; font-size: 0.8rem; }
+}
+
 /* ─── Slot screen — Cash Flow Goal ───────────────────────────── */
 .slot-goal-row {
   display: flex;

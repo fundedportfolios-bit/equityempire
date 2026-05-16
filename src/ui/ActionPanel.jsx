@@ -163,7 +163,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
     <>
       <div className="speed-row">
         {/* Speed Controls */}
-        <div className="speed-controls">
+        <div className="speed-controls" data-tutorial="speed-controls">
           <span className="tc-label">SPEED</span>
           <div className="speed-btn-row">
             {isPlaying ? (
@@ -221,6 +221,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
                   className={`action-btn action-btn--toggle${on ? ' action-btn--toggle-on' : ' action-btn--toggle-off'}`}
                   onClick={onTriviaToggle}
                   title={on ? 'Knowledge Power-Up: ON — click to disable' : 'Knowledge Power-Up: OFF — click to enable'}
+                  data-tutorial={`action-${action.id}`}
                 >
                   <PropertyIcon emoji={action.icon} image={action.iconImage} className="action-icon" />
                   <span className="action-label">{action.label}</span>
@@ -235,6 +236,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
                 className={`action-btn action-btn--live action-btn--${action.id}${meta.disabled ? ' action-btn--muted' : ''}`}
                 disabled={action.id !== 'staff' && meta.disabled}
                 onClick={() => handlers[action.id]?.()}
+                data-tutorial={`action-${action.id}`}
               >
                 <PropertyIcon emoji={action.icon} image={action.iconImage} className="action-icon" />
                 <span className="action-label">{action.label}</span>
