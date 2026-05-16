@@ -89,6 +89,11 @@ export const PROPERTY_WORKLOAD = {
   micro_resort:       120,
   apartment_building: 150,
   apartment_complex:  300,
+  // Late / endgame / postgame
+  resort:             600,
+  skyscraper:        1200,
+  private_island:    1800,
+  planet:           10000,
 }
 
 // ─── Issue workload (operations points / issue) ───────────────

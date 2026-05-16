@@ -34,6 +34,14 @@ function isUnlocked(pt, state) {
       return portfolioValue >= 2_000_000
     case 'apartment_complex':
       return portfolioValue >= 5_000_000
+    case 'resort':
+      return portfolioValue >= 10_000_000
+    case 'skyscraper':
+      return portfolioValue >= 25_000_000
+    case 'private_island':
+      return portfolioValue >= 50_000_000
+    case 'planet':
+      return portfolioValue >= 500_000_000
     default:
       return false
   }
@@ -52,6 +60,11 @@ export const VALUATION_CONFIG = {
   micro_resort:       { compWeight: 0.40, incomeWeight: 0.60, capRate: 0.1000, maxMonthlyShift: 0.025 },
   apartment_building: { compWeight: 0.20, incomeWeight: 0.80, capRate: 0.0675, maxMonthlyShift: 0.020 },
   apartment_complex:  { compWeight: 0.10, incomeWeight: 0.90, capRate: 0.0650, maxMonthlyShift: 0.020 },
+  // ── Late / endgame / postgame assets ─────────────────────────────────────
+  resort:             { compWeight: 0.30, incomeWeight: 0.70, capRate: 0.0900, maxMonthlyShift: 0.020 },
+  skyscraper:         { compWeight: 0.08, incomeWeight: 0.92, capRate: 0.0625, maxMonthlyShift: 0.015 },
+  private_island:     { compWeight: 0.40, incomeWeight: 0.60, capRate: 0.1200, maxMonthlyShift: 0.030 },
+  planet:             { compWeight: 0.05, incomeWeight: 0.95, capRate: 0.1500, maxMonthlyShift: 0.050 },
   // fix_flip: not listed → pure baseMarketValue appreciation, no income blend
 }
 
@@ -264,6 +277,27 @@ function tryAffordableRoll(typeId, state, apr, modOpts, maxAttempts = 8) {
   return null
 }
 
+// ─── Rare property substitution ──────────────────────────────────────────
+// Once unlocked, each tier-mix slot has a small per-slot chance of being
+// substituted with a rare/endgame property type. Listed rarest-first so the
+// rarest hit wins ties. Easy to tune later — adjust `chance` per row.
+const RARE_PROPERTIES = [
+  { typeId: 'planet',         chance: 0.01 },
+  { typeId: 'private_island', chance: 0.02 },
+  { typeId: 'skyscraper',     chance: 0.04 },
+  { typeId: 'resort',         chance: 0.08 },
+]
+
+function maybeSubstituteRare(typeId, state) {
+  for (const rare of RARE_PROPERTIES) {
+    const template = PROPERTY_TYPES.find(pt => pt.id === rare.typeId)
+    if (!template) continue
+    if (!isUnlocked(template, state)) continue
+    if (Math.random() < rare.chance) return rare.typeId
+  }
+  return typeId
+}
+
 export function generatePropertyOptions(state) {
   const apr       = (state.marketInterestRate ?? 0.0678) + 0.012
   const openCount = state.investOpenCount || 0
@@ -278,7 +312,12 @@ export function generatePropertyOptions(state) {
 
   // 1. One affordable roll per slot in the mix. Slot is null if no affordable
   //    roll could be generated within maxAttempts — that slot is dropped.
-  const slots = mix.map(typeId => tryAffordableRoll(typeId, state, apr, modOpts))
+  //    Each slot gets a rarity overlay: small per-slot chance of substituting
+  //    in a rare/endgame property type (if unlocked).
+  const slots = mix.map(typeId => {
+    const effectiveTypeId = maybeSubstituteRare(typeId, state)
+    return tryAffordableRoll(effectiveTypeId, state, apr, modOpts)
+  })
 
   // 2. Hot deal substitutes for one slot (never adds a 5th card). The hot
   //    deal's property type is drawn at random from the current tier's mix.
