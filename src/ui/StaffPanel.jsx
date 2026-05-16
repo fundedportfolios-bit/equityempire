@@ -200,8 +200,9 @@ export default function StaffPanel({ onClose }) {
             <h3 className="staff-section-title">Roster</h3>
             <div className="staff-roster-row">
               {STAFF_ROLE_ORDER.map(role => {
-                const cfg   = STAFF_ROLES[role]
-                const count = counts[role] || 0
+                const cfg     = STAFF_ROLES[role]
+                const count   = counts[role] || 0
+                const canHire = canHireStaffRole(state, role)
                 return (
                   <div key={role} className="staff-roster-chip">
                     <PropertyIcon emoji={cfg.icon} image={cfg.iconImage} className="staff-roster-icon" />
@@ -209,14 +210,24 @@ export default function StaffPanel({ onClose }) {
                       <span className="staff-roster-label">{cfg.label}</span>
                       <span className="staff-roster-count">×{count}</span>
                     </div>
-                    <button
-                      className="staff-roster-fire-btn"
-                      onClick={() => handleFire(role)}
-                      disabled={count === 0}
-                      title={count > 0 ? `Let go 1 ${cfg.label}` : `No ${cfg.label} to let go`}
-                    >
-                      Fire
-                    </button>
+                    <div className="staff-roster-actions">
+                      <button
+                        className="staff-roster-hire-btn"
+                        onClick={() => handleHire(role)}
+                        disabled={!canHire}
+                        title={canHire ? `Hire 1 ${cfg.label}` : 'Insufficient cash flow'}
+                      >
+                        Hire
+                      </button>
+                      <button
+                        className="staff-roster-fire-btn"
+                        onClick={() => handleFire(role)}
+                        disabled={count === 0}
+                        title={count > 0 ? `Let go 1 ${cfg.label}` : `No ${cfg.label} to let go`}
+                      >
+                        Fire
+                      </button>
+                    </div>
                   </div>
                 )
               })}

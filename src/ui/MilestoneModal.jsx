@@ -1,6 +1,7 @@
 import { useGame } from '../core/gameState.js'
 import { dismissMilestone } from '../core/gameEngine.js'
 import { formatShort } from '../utils/formatters.js'
+import PropertyIcon from './PropertyIcon.jsx'
 
 const MILESTONE_CONFIG = {
   1000000:    { emoji: '🎯', color: '#22c55e', label: '$1M Portfolio!' },
@@ -8,6 +9,7 @@ const MILESTONE_CONFIG = {
   10000000:   { emoji: '👑', color: '#a855f7', label: '$10M Portfolio!' },
   50000000:   { emoji: '🏆', color: '#f59e0b', label: '$50M Portfolio!' },
   halfwayCF:  { emoji: '💸', color: '#fbbf24', label: 'Halfway to Cash Flow Goal!' },
+  billionaire:{ emoji: '🪐', iconImage: '/icons/planet.png', color: '#a855f7', label: 'Billionaire Status!' },
 }
 
 function formatMonths(m) {
@@ -29,13 +31,18 @@ export default function MilestoneModal() {
   const goal     = state.cashFlowGoal || 10000
   const subtitle = m === 'halfwayCF'
     ? `You're earning ${formatShort(netCF)}/mo — halfway to your ${formatShort(goal)}/mo goal · ${timeline}`
-    : `Reached in ${timeline}`
+    : m === 'billionaire'
+      ? `You crossed $1B in cash! Watch for Planets — ultra-rare investment options that may now appear.`
+      : `Reached in ${timeline}`
 
   return (
     <div className="milestone-overlay">
       <div className="milestone-modal" style={{ '--mc': cfg.color }}>
         <div className="milestone-glow" />
-        <div className="milestone-emoji">{cfg.emoji}</div>
+        {cfg.iconImage
+          ? <PropertyIcon emoji={cfg.emoji} image={cfg.iconImage} className="milestone-emoji milestone-emoji--img" />
+          : <div className="milestone-emoji">{cfg.emoji}</div>
+        }
         <h2 className="milestone-title">{cfg.label}</h2>
         <p className="milestone-sub">{subtitle}</p>
 

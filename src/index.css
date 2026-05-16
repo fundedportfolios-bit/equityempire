@@ -1773,24 +1773,42 @@ body {
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
-.staff-roster-fire-btn {
+.staff-roster-actions {
   margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.staff-roster-hire-btn,
+.staff-roster-fire-btn {
   padding: 4px 10px;
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   background: transparent;
-  border: 1px solid rgba(239,68,68,0.4);
-  color: var(--negative);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 120ms, border-color 120ms;
+}
+.staff-roster-hire-btn {
+  border-color: rgba(34,197,94,0.4);
+  color: var(--positive);
+}
+.staff-roster-hire-btn:not(:disabled):hover {
+  background: rgba(34,197,94,0.1);
+  border-color: var(--positive);
+}
+.staff-roster-fire-btn {
+  border-color: rgba(239,68,68,0.4);
+  color: var(--negative);
 }
 .staff-roster-fire-btn:not(:disabled):hover {
   background: rgba(239,68,68,0.1);
   border-color: var(--negative);
 }
+.staff-roster-hire-btn:disabled,
 .staff-roster-fire-btn:disabled {
   opacity: 0.35;
   cursor: default;
@@ -2413,6 +2431,30 @@ body {
   white-space: nowrap;
 }
 
+/* ─── Batch Sell row ──────────────────────────────────────────── */
+.refi-batch-sell-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+.refi-batch-sell-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.refi-batch-sell-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.refi-batch-sell-toggle {
+  width: 100%;
+}
+
 /* ─── Tutorial overlay ───────────────────────────────────────── */
 .tutorial-overlay {
   position: fixed;
@@ -2814,6 +2856,11 @@ body {
   line-height: 1;
   margin-bottom: 12px;
   position: relative;
+}
+.milestone-emoji.milestone-emoji--img.prop-icon-img {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 12px;
 }
 
 .milestone-title {

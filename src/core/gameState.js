@@ -62,6 +62,7 @@ export const INITIAL_STATE = {
   activeMilestone: null,
   milestonesHit: [],
   cashFlowMilestoneHit: false,
+  billionaireSeen: false,  // fires once when cash first crosses $1B
 
   // Meta
   gameStarted: false,
@@ -228,7 +229,19 @@ export function gameReducer(state, action) {
         newMonth > 1 &&
         newNetCF >= halfwayGoal
 
-      const newMilestone = portfolioMilestone ?? (justHitHalfwayCF ? 'halfwayCF' : null)
+      // Billionaire status — fires once when cash first crosses $1B.
+      // Prefers other milestones if they also fire this tick (queued for later).
+      const justBillionaire =
+        !state.billionaireSeen &&
+        newCash >= 1_000_000_000 &&
+        !portfolioMilestone &&
+        !justHitHalfwayCF &&
+        !justWon
+
+      const newMilestone =
+        portfolioMilestone
+        ?? (justHitHalfwayCF ? 'halfwayCF' : null)
+        ?? (justBillionaire ? 'billionaire' : null)
       const milestoneOrWin = newMilestone || justWon
 
       return {
@@ -252,6 +265,7 @@ export function gameReducer(state, action) {
         activeMilestone:       newMilestone ?? state.activeMilestone,
         milestonesHit:         portfolioMilestone ? [...(state.milestonesHit || []), portfolioMilestone] : (state.milestonesHit || []),
         cashFlowMilestoneHit:  state.cashFlowMilestoneHit || justHitHalfwayCF,
+        billionaireSeen:       state.billionaireSeen || justBillionaire,
       }
     }
 
@@ -478,6 +492,32 @@ export function gameReducer(state, action) {
         monthlyIncome:   sellTotals.monthlyIncome,
         monthlyExpenses: sellTotals.monthlyExpenses,
         alerts:          [sellAlert, ...state.alerts].slice(0, 20),
+      }
+    }
+
+    case 'SELL_PROPERTIES_BATCH': {
+      const { sales } = action.payload
+      if (!Array.isArray(sales) || sales.length === 0) return state
+
+      const ids = new Set(sales.map(s => s.propertyId))
+      const remainingPropsBatch = state.properties.filter(p => !ids.has(p.id))
+      const totalProceeds = sales.reduce((s, x) => s + (x.netProceeds || 0), 0)
+      const batchSellTotals = recalculatePortfolioTotals(remainingPropsBatch, state.currentMonth)
+      const batchSellAlert = {
+        id:        `sell-batch-${Date.now()}`,
+        message:   `Sold ${sales.length} propert${sales.length === 1 ? 'y' : 'ies'} — net proceeds: $${totalProceeds.toLocaleString()} added to cash.`,
+        type:      'success',
+        timestamp: state.currentMonth,
+      }
+      return {
+        ...state,
+        cash:            state.cash + totalProceeds,
+        properties:      remainingPropsBatch,
+        portfolioValue:  batchSellTotals.portfolioValue,
+        totalDebt:       batchSellTotals.totalDebt,
+        monthlyIncome:   batchSellTotals.monthlyIncome,
+        monthlyExpenses: batchSellTotals.monthlyExpenses,
+        alerts:          [batchSellAlert, ...state.alerts].slice(0, 20),
       }
     }
 

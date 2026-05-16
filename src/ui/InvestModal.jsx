@@ -147,11 +147,14 @@ export default function InvestModal({ onClose }) {
   const [options, setOptions] = useState([])
 
   // Generate options once when the modal opens.
-  // Hot deal always lands at the top; other options sort cheapest first.
+  // Hot deal always lands at the top; other options sort by highest projected
+  // net cash flow first (best earner up top).
   useEffect(() => {
     const opts = generatePropertyOptions(state)
     const hot  = opts.filter(o => o.isHotDeal)
-    const rest = opts.filter(o => !o.isHotDeal).sort((a, b) => a.cashNeeded - b.cashNeeded)
+    const rest = opts.filter(o => !o.isHotDeal).sort(
+      (a, b) => (b.netCashFlow ?? 0) - (a.netCashFlow ?? 0)
+    )
     setOptions([...hot, ...rest])
   }, [])
 

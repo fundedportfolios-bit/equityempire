@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useGame } from '../core/gameState.js'
-import { installUpgrade } from '../core/gameEngine.js'
+import { installUpgrade, installUpgradesBatch } from '../core/gameEngine.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
@@ -72,6 +72,27 @@ export default function UpgradeAllModal({ onClose }) {
     dispatch(installUpgrade(property.id, makeInstance(template, rolledCost, permanentRentBoost, permanentValueBoost)))
   }
 
+  // Group upgrades by property so we can fire one INSTALL_UPGRADES_BATCH
+  // per property (the existing batch reducer is keyed to a single propertyId).
+  const totalCost      = allUpgrades.reduce((s, u) => s + u.rolledCost, 0)
+  const totalRentBoost = allUpgrades.reduce((s, u) => s + (u.permanentRentBoost || 0), 0)
+  const canBuyAll      = allUpgrades.length > 0 && state.cash >= totalCost
+  const buyAllShortfall = totalCost - state.cash
+
+  function handleBuyAll() {
+    if (!canBuyAll) return
+    const byProp = new Map()
+    for (const u of allUpgrades) {
+      const arr = byProp.get(u.property.id) || []
+      arr.push(makeInstance(u.template, u.rolledCost, u.permanentRentBoost, u.permanentValueBoost))
+      byProp.set(u.property.id, arr)
+    }
+    for (const [propId, instances] of byProp.entries()) {
+      dispatch(installUpgradesBatch(propId, instances))
+    }
+    onClose()
+  }
+
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
@@ -93,16 +114,36 @@ export default function UpgradeAllModal({ onClose }) {
           {allUpgrades.length === 0
             ? <p className="empty-state">No upgrades available across your portfolio yet.</p>
             : (
-              <ul className="upgrades-list">
-                {allUpgrades.map(u => (
-                  <UpgradeRow
-                    key={`${u.property.id}-${u.template.upgradeId}`}
-                    upgrade={u}
-                    playerCash={state.cash}
-                    onInstall={handleInstall}
-                  />
-                ))}
-              </ul>
+              <>
+                <div className="upgrade-buy-all-bar">
+                  <div className="upgrade-buy-all-summary">
+                    <span className="upgrade-buy-all-label">Install all {allUpgrades.length} portfolio upgrades</span>
+                    {totalRentBoost > 0 && (
+                      <span className="upgrade-buy-all-roi">+{formatCurrency(totalRentBoost)}/mo</span>
+                    )}
+                  </div>
+                  <button
+                    className={`btn btn-sm upgrade-buy-all-btn${canBuyAll ? ' btn-success' : ''}`}
+                    disabled={!canBuyAll}
+                    title={canBuyAll
+                      ? `Install all ${allUpgrades.length} upgrades for ${formatCurrency(totalCost)}`
+                      : `Need ${formatCurrency(buyAllShortfall)} more`}
+                    onClick={handleBuyAll}
+                  >
+                    BUY ALL · {formatCurrency(totalCost)}
+                  </button>
+                </div>
+                <ul className="upgrades-list">
+                  {allUpgrades.map(u => (
+                    <UpgradeRow
+                      key={`${u.property.id}-${u.template.upgradeId}`}
+                      upgrade={u}
+                      playerCash={state.cash}
+                      onInstall={handleInstall}
+                    />
+                  ))}
+                </ul>
+              </>
             )
           }
         </div>

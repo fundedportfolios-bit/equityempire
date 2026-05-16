@@ -95,6 +95,11 @@ export function sellProperty(propertyId, netProceeds) {
   return { type: 'SELL_PROPERTY', payload: { propertyId, netProceeds } }
 }
 
+export function sellPropertiesBatch(sales) {
+  // sales: Array<{ propertyId, netProceeds }>
+  return { type: 'SELL_PROPERTIES_BATCH', payload: { sales } }
+}
+
 export function refinanceProperty(propertyId, refiData) {
   return { type: 'REFINANCE_PROPERTY', payload: { propertyId, ...refiData } }
 }
