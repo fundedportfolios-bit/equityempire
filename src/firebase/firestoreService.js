@@ -55,6 +55,46 @@ function assertAuthAndUid(callerUid, op) {
   return cu.uid
 }
 
+// ─── Firestore-safe serialization helpers ──────────────────────────────
+// Firestore rejects `undefined` in any document field. These helpers find
+// every undefined path for logging, then strip them so the save still goes
+// through. Sanitizer is intentionally minimal so it doesn't alter Dates,
+// special objects, or any future Firestore values.
+
+export function findUndefinedPaths(value, path = 'saveData', results = [], seen = new WeakSet()) {
+  if (value === undefined) {
+    results.push(path)
+    return results
+  }
+  if (value === null || typeof value !== 'object') return results
+  if (seen.has(value)) return results
+  seen.add(value)
+
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => findUndefinedPaths(item, `${path}[${i}]`, results, seen))
+    return results
+  }
+  Object.entries(value).forEach(([k, v]) => findUndefinedPaths(v, `${path}.${k}`, results, seen))
+  return results
+}
+
+export function sanitizeForFirestore(value, insideArray = false, seen = new WeakSet()) {
+  if (value === undefined) return insideArray ? null : undefined
+  if (value === null || typeof value !== 'object') return value
+  if (seen.has(value)) return null
+  seen.add(value)
+
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeForFirestore(item, true, seen))
+  }
+  const cleaned = {}
+  Object.entries(value).forEach(([k, v]) => {
+    const cv = sanitizeForFirestore(v, false, seen)
+    if (cv !== undefined) cleaned[k] = cv
+  })
+  return cleaned
+}
+
 // ─── Load one slot ─────────────────────────────────────────────────────
 export async function loadSlotFromFirestore(uid, slotIndex) {
   const op   = 'loadSlot'
@@ -107,7 +147,29 @@ export async function saveSlotToFirestore(uid, slotIndex, state) {
       '| properties:', state.properties?.length ?? 0,
       '| cash:', state.cash,
     )
-    await setDoc(ref, payload)
+
+    // Diagnostics: log every undefined path so we can fix the data source.
+    const undefinedPaths = findUndefinedPaths(payload)
+    if (undefinedPaths.length > 0) {
+      console.warn(
+        `[Firestore.${op}] Undefined values found before save (${undefinedPaths.length}):`,
+        undefinedPaths,
+      )
+    }
+
+    const sanitizedPayload = sanitizeForFirestore(payload)
+
+    // Size check — Firestore documents have a 1 MiB hard limit. 900 KB is a
+    // reasonable yellow-flag threshold to surface bloat before we hit the wall.
+    const approxBytes = new TextEncoder().encode(JSON.stringify(sanitizedPayload)).length
+    console.log(`[Firestore.${op}] approx cloud save size:`, approxBytes, 'bytes')
+    if (approxBytes > 900_000) {
+      console.warn(
+        `[Firestore.${op}] Cloud save is approaching Firestore's 1 MiB document limit. Consider splitting save data into subcollections soon.`,
+      )
+    }
+
+    await setDoc(ref, sanitizedPayload)
     console.log(`[Firestore.${op}] SUCCESS — wrote`, path, 'at', now)
   } catch (e) {
     console.error(`[Firestore.${op}] FAILED at`, path, '| code:', e.code, '| message:', e.message, '| full error:', e)

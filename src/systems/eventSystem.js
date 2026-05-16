@@ -84,8 +84,10 @@ function makeEventInstance(eventId, name, category, cashImpactType, priority, ro
     frequencyMonths,
     valueImpact:         0,
     conditionImpact:     0,
-    permanentRentBoost:  undefined,
-    permanentValueBoost: undefined,
+    // null (not undefined) so Firestore can serialize. Only upgrade-type
+    // events ever carry meaningful values here; consumers read with `|| 0`.
+    permanentRentBoost:  null,
+    permanentValueBoost: null,
   }
 }
 
@@ -505,8 +507,9 @@ export function attachStartupActions(property, currentMonth) {
       frequencyMonths:     null,
       valueImpact:         0,
       conditionImpact:     0,
-      permanentRentBoost:  undefined,
-      permanentValueBoost: undefined,
+      // null (not undefined) for Firestore serialization compatibility.
+      permanentRentBoost:  null,
+      permanentValueBoost: null,
     }
   })
   return { ...property, activeEvents: [...(property.activeEvents || []), ...instances] }
