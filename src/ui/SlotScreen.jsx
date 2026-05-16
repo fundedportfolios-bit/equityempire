@@ -26,7 +26,9 @@ function readCachedApr() {
 function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelete }) {
   const [pickingDifficulty, setPickingDifficulty] = useState(false)
   const [confirmDelete,     setConfirmDelete]     = useState(false)
-  const [pendingGoal,       setPendingGoal]       = useState(defaultGoal)
+  // Initial goal for the picker: saved game's existing goal if any, else default.
+  const initialGoal = (data?.state?.cashFlowGoal) || defaultGoal
+  const [pendingGoal, setPendingGoal] = useState(initialGoal)
 
   if (data) {
     const { state, savedAt, updatedAt } = data
@@ -36,7 +38,6 @@ function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelet
       : '—'
     const monthLabel    = formatMonthLabel(state.currentMonth ?? 1).replace(' — ', ' ')
     const propCount     = state.properties?.length ?? 0
-    const slotGoal      = state.cashFlowGoal || defaultGoal
 
     return (
       <div className="slot-card slot-card--filled">
@@ -57,15 +58,31 @@ function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelet
             <span className="slot-stat-value">{propCount}</span>
           </div>
           <div className="slot-stat">
-            <span className="slot-stat-label">Goal</span>
-            <span className="slot-stat-value">${slotGoal.toLocaleString()}/mo</span>
+            <span className="slot-stat-label">Difficulty</span>
+            <span className="slot-stat-value" style={{ textTransform: 'capitalize' }}>{state.difficulty ?? '—'}</span>
           </div>
+        </div>
+
+        {/* Editable cash-flow goal for this slot — the value chosen here is
+            applied to the in-progress game on Continue. */}
+        <div className="slot-card-goal-row">
+          <label className="slot-card-goal-label" htmlFor={`slot-goal-${slotIndex}`}>Cash Flow Goal</label>
+          <select
+            id={`slot-goal-${slotIndex}`}
+            className="slot-card-goal-select"
+            value={pendingGoal}
+            onChange={(e) => setPendingGoal(parseInt(e.target.value, 10))}
+          >
+            {GOAL_OPTIONS.map(v => (
+              <option key={v} value={v}>${v.toLocaleString()}/mo</option>
+            ))}
+          </select>
         </div>
 
         <p className="slot-saved-at">Last saved {savedDate}</p>
 
         <div className="slot-actions">
-          <button className="btn btn-primary slot-continue-btn" onClick={() => onContinue(slotGoal)}>
+          <button className="btn btn-primary slot-continue-btn" onClick={() => onContinue(pendingGoal)}>
             Continue →
           </button>
           {confirmDelete ? (
@@ -210,6 +227,7 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
           <span className="slot-apr-label">Today's APR</span>
           <span className="slot-apr-value">{(apr * 100).toFixed(2)}%</span>
         </div>
+        <p className="slot-apr-note">Today's investments will lock in this rate!</p>
       </div>
 
       <h2 className="slot-choose-label">Choose a Save Slot</h2>

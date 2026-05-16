@@ -2566,6 +2566,13 @@ body {
   font-weight: 700;
   color: #38bdf8;
 }
+.slot-apr-note {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: right;
+  margin: 2px 0 0;
+}
 
 /* ─── Slot card — per-slot Cash Flow Goal picker ─────────────── */
 .slot-card-goal-row {
