@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useGame } from '../core/gameState.js'
-import { installUpgrade } from '../core/gameEngine.js'
+import { installUpgrade, installUpgradesBatch } from '../core/gameEngine.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
@@ -76,6 +76,21 @@ export default function UpgradeModal({ propertyId, onClose }) {
     dispatch(installUpgrade(propertyId, makeInstance(template, rolledCost, permanentRentBoost, permanentValueBoost)))
   }
 
+  // ── Buy-all totals ────────────────────────────────────────────
+  const totalCost      = upgrades.reduce((s, u) => s + u.rolledCost, 0)
+  const totalRentBoost = upgrades.reduce((s, u) => s + (u.permanentRentBoost || 0), 0)
+  const canBuyAll      = upgrades.length > 0 && state.cash >= totalCost
+  const buyAllShortfall = totalCost - state.cash
+
+  function handleBuyAll() {
+    if (!canBuyAll) return
+    const instances = upgrades.map(u =>
+      makeInstance(u.template, u.rolledCost, u.permanentRentBoost, u.permanentValueBoost)
+    )
+    dispatch(installUpgradesBatch(propertyId, instances))
+    onClose()
+  }
+
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
@@ -96,16 +111,36 @@ export default function UpgradeModal({ propertyId, onClose }) {
           {upgrades.length === 0
             ? <p className="empty-state">No upgrades available for this property yet.</p>
             : (
-              <ul className="upgrades-list">
-                {upgrades.map(u => (
-                  <UpgradeRow
-                    key={u.template.upgradeId}
-                    upgrade={u}
-                    playerCash={state.cash}
-                    onInstall={handleInstall}
-                  />
-                ))}
-              </ul>
+              <>
+                <div className="upgrade-buy-all-bar">
+                  <div className="upgrade-buy-all-summary">
+                    <span className="upgrade-buy-all-label">Install all {upgrades.length}</span>
+                    {totalRentBoost > 0 && (
+                      <span className="upgrade-buy-all-roi">+{formatCurrency(totalRentBoost)}/mo</span>
+                    )}
+                  </div>
+                  <button
+                    className={`btn btn-sm upgrade-buy-all-btn${canBuyAll ? ' btn-success' : ''}`}
+                    disabled={!canBuyAll}
+                    title={canBuyAll
+                      ? `Install all ${upgrades.length} upgrades for ${formatCurrency(totalCost)}`
+                      : `Need ${formatCurrency(buyAllShortfall)} more`}
+                    onClick={handleBuyAll}
+                  >
+                    BUY ALL · {formatCurrency(totalCost)}
+                  </button>
+                </div>
+                <ul className="upgrades-list">
+                  {upgrades.map(u => (
+                    <UpgradeRow
+                      key={u.template.upgradeId}
+                      upgrade={u}
+                      playerCash={state.cash}
+                      onInstall={handleInstall}
+                    />
+                  ))}
+                </ul>
+              </>
             )
           }
         </div>

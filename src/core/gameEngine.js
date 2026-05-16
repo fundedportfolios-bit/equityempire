@@ -17,6 +17,10 @@ export function installUpgrade(propertyId, upgradeInstance) {
   return { type: 'INSTALL_UPGRADE', payload: { propertyId, upgradeInstance } }
 }
 
+export function installUpgradesBatch(propertyId, upgradeInstances) {
+  return { type: 'INSTALL_UPGRADES_BATCH', payload: { propertyId, upgradeInstances } }
+}
+
 export function addAlert(message, type = 'info', id = null) {
   return {
     type: 'ADD_ALERT',

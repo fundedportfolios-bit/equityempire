@@ -398,6 +398,63 @@ export function gameReducer(state, action) {
       }
     }
 
+    case 'INSTALL_UPGRADES_BATCH': {
+      const { propertyId: batchPropId, upgradeInstances } = action.payload
+      if (!Array.isArray(upgradeInstances) || upgradeInstances.length === 0) return state
+
+      const totalCost = upgradeInstances.reduce((s, u) => s + (u.rolledCost || 0), 0)
+      if (state.cash < totalCost) {
+        const noFundsAlert = {
+          id:        `nofunds-batch-${Date.now()}`,
+          message:   `Not enough cash to install ${upgradeInstances.length} upgrades. Need $${totalCost.toLocaleString()}.`,
+          type:      'error',
+          timestamp: state.currentMonth,
+        }
+        return { ...state, alerts: [noFundsAlert, ...state.alerts].slice(0, 20) }
+      }
+
+      const totalRent  = upgradeInstances.reduce((s, u) => s + (u.permanentRentBoost  || 0), 0)
+      const totalValue = upgradeInstances.reduce((s, u) => s + (u.permanentValueBoost || 0), 0)
+      const sourceIds  = upgradeInstances.map(u => u.sourceId).filter(Boolean)
+
+      const updatedBatchProperties = state.properties.map(p => {
+        if (p.id !== batchPropId) return p
+        const newRent       = (p.monthlyRent || 0) + totalRent
+        const newTotalBoost = (p.totalUpgradeValueBoost ?? 0) + totalValue
+        const { currentValue: newCurrentValue } = computeBlendedValue({
+          ...p,
+          monthlyRent:            Math.round(newRent),
+          totalUpgradeValueBoost: newTotalBoost,
+        })
+        return {
+          ...p,
+          monthlyRent:            Math.round(newRent),
+          totalUpgradeValueBoost: newTotalBoost,
+          currentValue:           newCurrentValue,
+          completedUpgrades:      [...(p.completedUpgrades || []), ...sourceIds],
+        }
+      })
+      const batchTotals = recalculatePortfolioTotals(updatedBatchProperties, state.currentMonth)
+      const batchProp   = state.properties.find(p => p.id === batchPropId)
+      const batchAlert  = {
+        id:        `upgrade-batch-${Date.now()}`,
+        message:   `Installed ${upgradeInstances.length} upgrade${upgradeInstances.length !== 1 ? 's' : ''}${batchProp ? ` on ${batchProp.name}` : ''} — paid $${totalCost.toLocaleString()}. +$${totalRent.toLocaleString()}/mo rent.`,
+        type:      'success',
+        timestamp: state.currentMonth,
+      }
+
+      return {
+        ...state,
+        cash:            state.cash - totalCost,
+        properties:      updatedBatchProperties,
+        portfolioValue:  batchTotals.portfolioValue,
+        totalDebt:       batchTotals.totalDebt,
+        monthlyIncome:   batchTotals.monthlyIncome,
+        monthlyExpenses: batchTotals.monthlyExpenses,
+        alerts:          [batchAlert, ...state.alerts].slice(0, 20),
+      }
+    }
+
     case 'SELL_PROPERTY': {
       const { propertyId: sellId, netProceeds } = action.payload
       const soldProp = state.properties.find(p => p.id === sellId)
