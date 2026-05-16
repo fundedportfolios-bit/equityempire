@@ -1,5 +1,5 @@
 import { useGame } from '../core/gameState.js'
-import { hireStaffRole } from '../core/gameEngine.js'
+import { hireStaffRole, fireStaffRole } from '../core/gameEngine.js'
 import {
   getStaffCounts,
   getTotalStaffCount,
@@ -110,6 +110,10 @@ export default function StaffPanel({ onClose }) {
     dispatch(hireStaffRole(role))
   }
 
+  function handleFire(role) {
+    dispatch(fireStaffRole(role))
+  }
+
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
@@ -196,14 +200,23 @@ export default function StaffPanel({ onClose }) {
             <h3 className="staff-section-title">Roster</h3>
             <div className="staff-roster-row">
               {STAFF_ROLE_ORDER.map(role => {
-                const cfg = STAFF_ROLES[role]
+                const cfg   = STAFF_ROLES[role]
+                const count = counts[role] || 0
                 return (
                   <div key={role} className="staff-roster-chip">
                     <PropertyIcon emoji={cfg.icon} image={cfg.iconImage} className="staff-roster-icon" />
                     <div className="staff-roster-meta">
                       <span className="staff-roster-label">{cfg.label}</span>
-                      <span className="staff-roster-count">×{counts[role] || 0}</span>
+                      <span className="staff-roster-count">×{count}</span>
                     </div>
+                    <button
+                      className="staff-roster-fire-btn"
+                      onClick={() => handleFire(role)}
+                      disabled={count === 0}
+                      title={count > 0 ? `Let go 1 ${cfg.label}` : `No ${cfg.label} to let go`}
+                    >
+                      Fire
+                    </button>
                   </div>
                 )
               })}

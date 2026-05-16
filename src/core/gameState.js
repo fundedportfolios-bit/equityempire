@@ -533,6 +533,31 @@ export function gameReducer(state, action) {
       }
     }
 
+    case 'FIRE_STAFF_ROLE': {
+      const { role } = action.payload
+      const cfg = STAFF_ROLES[role]
+      if (!cfg) return state
+
+      const currentStaff = getStaffCounts(state)
+      const currentCount = currentStaff[role] || 0
+      if (currentCount <= 0) return state  // nothing to fire
+
+      const newStaff   = { ...currentStaff, [role]: currentCount - 1 }
+      const newExpense = getTotalStaffExpense({ staff: newStaff, currentMonth: state.currentMonth })
+      const alert = {
+        id:        `fire-${role}-${Date.now()}`,
+        message:   `Let go 1 ${cfg.label}. Monthly staff expense is now $${newExpense.toLocaleString()}.`,
+        type:      'info',
+        timestamp: state.currentMonth,
+      }
+      return {
+        ...state,
+        staff:        newStaff,
+        staffExpense: newExpense,
+        alerts:       [alert, ...state.alerts].slice(0, 20),
+      }
+    }
+
     case 'ADD_ALERT': {
       const { id, message, type, timestamp } = action.payload
       return {

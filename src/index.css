@@ -1739,6 +1739,28 @@ body {
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
+.staff-roster-fire-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: transparent;
+  border: 1px solid rgba(239,68,68,0.4);
+  color: var(--negative);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.staff-roster-fire-btn:not(:disabled):hover {
+  background: rgba(239,68,68,0.1);
+  border-color: var(--negative);
+}
+.staff-roster-fire-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .staff-roster-icon { font-size: 1.3rem; }
 .staff-roster-icon.prop-icon-img { width: 28px; height: 28px; }
 .staff-roster-meta {

@@ -110,6 +110,10 @@ export function hireStaffRole(role) {
   return { type: 'HIRE_STAFF_ROLE', payload: { role } }
 }
 
+export function fireStaffRole(role) {
+  return { type: 'FIRE_STAFF_ROLE', payload: { role } }
+}
+
 export function closeTrivia(reward, dismissed = false) {
   return { type: 'CLOSE_TRIVIA', payload: { reward, dismissed } }
 }
