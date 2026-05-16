@@ -9,11 +9,24 @@ import { formatMonthLabel }                                  from '../core/timeS
 
 const GOAL_OPTIONS = [5000, ...Array.from({ length: 23 }, (_, i) => 6000 + i * 2000)]
 const isCloudUser  = (user) => user?.id && user.id !== 'guest'
+const PMMS_CACHE   = 'equity_empire_pmms'
+const FALLBACK_APR = 0.0678
+
+// Read today's APR from the same cache used by useMarketRate, so the slot
+// screen always reflects whatever the in-game system would.
+function readCachedApr() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(PMMS_CACHE) || 'null')
+    if (cached && typeof cached.rate === 'number') return cached.rate
+  } catch {}
+  return FALLBACK_APR
+}
 
 // ─── SlotCard ─────────────────────────────────────────────
-function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
+function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelete }) {
   const [pickingDifficulty, setPickingDifficulty] = useState(false)
   const [confirmDelete,     setConfirmDelete]     = useState(false)
+  const [pendingGoal,       setPendingGoal]       = useState(defaultGoal)
 
   if (data) {
     const { state, savedAt, updatedAt } = data
@@ -21,8 +34,9 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
     const savedDate   = displayDate
       ? new Date(displayDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
       : '—'
-    const monthLabel = formatMonthLabel(state.currentMonth ?? 1).replace(' — ', ' ')
-    const propCount  = state.properties?.length ?? 0
+    const monthLabel    = formatMonthLabel(state.currentMonth ?? 1).replace(' — ', ' ')
+    const propCount     = state.properties?.length ?? 0
+    const slotGoal      = state.cashFlowGoal || defaultGoal
 
     return (
       <div className="slot-card slot-card--filled">
@@ -43,15 +57,15 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
             <span className="slot-stat-value">{propCount}</span>
           </div>
           <div className="slot-stat">
-            <span className="slot-stat-label">Difficulty</span>
-            <span className="slot-stat-value" style={{ textTransform: 'capitalize' }}>{state.difficulty ?? '—'}</span>
+            <span className="slot-stat-label">Goal</span>
+            <span className="slot-stat-value">${slotGoal.toLocaleString()}/mo</span>
           </div>
         </div>
 
         <p className="slot-saved-at">Last saved {savedDate}</p>
 
         <div className="slot-actions">
-          <button className="btn btn-primary slot-continue-btn" onClick={onContinue}>
+          <button className="btn btn-primary slot-continue-btn" onClick={() => onContinue(slotGoal)}>
             Continue →
           </button>
           {confirmDelete ? (
@@ -75,6 +89,20 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
       <div className="slot-card-label">Slot {slotIndex + 1}</div>
       <div className="slot-card-empty-text">Empty</div>
 
+      <div className="slot-card-goal-row">
+        <label className="slot-card-goal-label" htmlFor={`slot-goal-${slotIndex}`}>Cash Flow Goal</label>
+        <select
+          id={`slot-goal-${slotIndex}`}
+          className="slot-card-goal-select"
+          value={pendingGoal}
+          onChange={(e) => setPendingGoal(parseInt(e.target.value, 10))}
+        >
+          {GOAL_OPTIONS.map(v => (
+            <option key={v} value={v}>${v.toLocaleString()}/mo</option>
+          ))}
+        </select>
+      </div>
+
       {pickingDifficulty ? (
         <div className="slot-difficulty-picker">
           <p className="slot-difficulty-prompt">Choose difficulty</p>
@@ -82,7 +110,7 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
             <button
               key={key}
               className={`slot-difficulty-btn slot-diff-${key}`}
-              onClick={() => onNewGame(key)}
+              onClick={() => onNewGame(key, pendingGoal)}
             >
               <span className="slot-diff-label">{s.label}</span>
               <span className="slot-diff-cash">${s.startingCash.toLocaleString()} start</span>
@@ -103,12 +131,19 @@ function SlotCard({ slotIndex, data, onNewGame, onContinue, onDelete }) {
 export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   const cloud = isCloudUser(user)
 
-  // Slots — null = still loading (cloud users only)
   const [slots,   setSlots]   = useState(() => cloud ? null : getAllSlots(user.id))
   const [loading, setLoading] = useState(cloud)
-  const [goal,    setGoal]    = useState(() => getUserGoal(user.id))
+  const [apr]                 = useState(readCachedApr)
 
-  // Load cloud saves on mount
+  // Default goal saved per user — used as the starting selection in each
+  // empty slot card. Persists last-used goal so the dropdown isn't reset.
+  const [defaultGoal, setDefaultGoal] = useState(() => getUserGoal(user.id))
+
+  function persistDefaultGoal(g) {
+    setDefaultGoal(g)
+    setUserGoal(user.id, g)
+  }
+
   useEffect(() => {
     if (!cloud) return
     console.log('[SlotScreen] Loading cloud slots for uid:', user.id)
@@ -124,12 +159,6 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
         setLoading(false)
       })
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-
-  function handleGoalChange(e) {
-    const val = parseInt(e.target.value, 10)
-    setGoal(val)
-    setUserGoal(user.id, val)
-  }
 
   async function handleDelete(i) {
     if (cloud) {
@@ -177,18 +206,9 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
             </button>
           </div>
         </div>
-        <div className="slot-goal-row">
-          <label className="slot-goal-label" htmlFor="cash-flow-goal">Monthly Cash Flow Goal</label>
-          <select
-            id="cash-flow-goal"
-            className="slot-goal-select"
-            value={goal}
-            onChange={handleGoalChange}
-          >
-            {GOAL_OPTIONS.map(v => (
-              <option key={v} value={v}>${v.toLocaleString()}/mo</option>
-            ))}
-          </select>
+        <div className="slot-apr-row" title="30-year fixed mortgage rate (Freddie Mac PMMS)">
+          <span className="slot-apr-label">Today's APR</span>
+          <span className="slot-apr-value">{(apr * 100).toFixed(2)}%</span>
         </div>
       </div>
 
@@ -204,8 +224,12 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
             key={i}
             slotIndex={i}
             data={data}
-            onNewGame={(difficulty) => onSelectSlot({ slotIndex: i, isNew: true, difficulty, cashFlowGoal: goal })}
-            onContinue={() => onSelectSlot({ slotIndex: i, isNew: false, cashFlowGoal: goal })}
+            defaultGoal={defaultGoal}
+            onNewGame={(difficulty, goal) => {
+              persistDefaultGoal(goal)
+              onSelectSlot({ slotIndex: i, isNew: true, difficulty, cashFlowGoal: goal })
+            }}
+            onContinue={(goal) => onSelectSlot({ slotIndex: i, isNew: false, cashFlowGoal: goal })}
             onDelete={() => handleDelete(i)}
           />
         ))}

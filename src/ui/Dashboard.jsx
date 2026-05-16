@@ -69,10 +69,12 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   useMarketRate(dispatch)
 
   // Auto-launch the tutorial on the first render of a brand-new game
-  // (i.e. when state.tutorialSeen is false). Loading a saved game where it's
-  // already true skips this. Pauses the speed timer via setModalOpen.
+  // (i.e. when state.tutorialSeen is false AND the player hasn't built
+  // anything yet — portfolioValue > $1 means this is an in-progress game
+  // that just didn't get tutorialSeen flipped, so skip the auto-launch).
+  // The ? button still allows manual replay.
   useEffect(() => {
-    if (!state.tutorialSeen && !tutorialOpen) {
+    if (!state.tutorialSeen && (state.portfolioValue ?? 0) <= 1 && !tutorialOpen) {
       setTutorialAuto(true)
       setTutorialOpen(true)
       dispatch(setModalOpen(true))
