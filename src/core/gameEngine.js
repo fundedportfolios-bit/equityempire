@@ -101,7 +101,13 @@ export function refinanceBatch(refis) {
 }
 
 export function hireStaff() {
-  return { type: 'HIRE_STAFF' }
+  // Legacy single-role hire — defaults to fullTime so any old call sites
+  // (and old game saves) still work after the workload-model refactor.
+  return { type: 'HIRE_STAFF_ROLE', payload: { role: 'fullTime' } }
+}
+
+export function hireStaffRole(role) {
+  return { type: 'HIRE_STAFF_ROLE', payload: { role } }
 }
 
 export function closeTrivia(reward, dismissed = false) {

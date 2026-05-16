@@ -3,6 +3,8 @@ import { DIFFICULTY_SETTINGS } from '../data/difficultySettings.js'
 import { calculateEquity, calculateNetCashFlow } from '../utils/financeMath.js'
 import { formatShort, formatCashFlow } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
+import { getStaffCounts, getTotalStaffCount, getCoverageRatio, getStaffStatus } from '../systems/staffSystem.js'
+import { STAFF_ROLES, STAFF_ROLE_ORDER, COVERAGE_STATUSES } from '../data/staffRules.js'
 
 function StatCard({ label, value, valueClass = '' }) {
   return (
@@ -13,7 +15,7 @@ function StatCard({ label, value, valueClass = '' }) {
   )
 }
 
-function PropertyTypeBar({ properties, staffCount }) {
+function PropertyTypeBar({ properties, state }) {
   // Group properties by templateId so we can pull both the emoji and the
   // image path from the first matching property in each group.
   const groups = properties.reduce((acc, p) => {
@@ -22,8 +24,10 @@ function PropertyTypeBar({ properties, staffCount }) {
     acc[key].count++
     return acc
   }, {})
-  const entries = Object.entries(groups)
-  if (entries.length === 0 && staffCount === 0) return null
+  const entries     = Object.entries(groups)
+  const staffCounts = getStaffCounts(state)
+  const totalStaff  = getTotalStaffCount(state)
+  if (entries.length === 0 && totalStaff === 0) return null
   return (
     <div className="property-type-bar">
       <div className="ptb-icons">
@@ -35,10 +39,43 @@ function PropertyTypeBar({ properties, staffCount }) {
         ))}
         {entries.length === 0 && <span className="ptb-empty">No properties yet</span>}
       </div>
-      <div className="ptb-staff">
-        <PropertyIcon emoji="👤" image="/icons/staff.png" className="ptc-icon" />
-        <span className="ptc-count">{staffCount}</span>
+      <div className="ptb-staff-group">
+        {STAFF_ROLE_ORDER.map(role => {
+          const count = staffCounts[role] || 0
+          if (count === 0) return null
+          const cfg = STAFF_ROLES[role]
+          return (
+            <div key={role} className="ptb-staff-chip" title={`${cfg.label}: ${count}`}>
+              <PropertyIcon emoji={cfg.icon} image={cfg.iconImage} className="ptc-icon" />
+              <span className="ptc-count">{count}</span>
+            </div>
+          )
+        })}
       </div>
+    </div>
+  )
+}
+
+function CoverageStatusRow({ state }) {
+  const totalStaff = getTotalStaffCount(state)
+  if (totalStaff === 0) return null
+  const status = getStaffStatus(state)
+  const ratio  = getCoverageRatio(state)
+  const pct    = isFinite(ratio) ? `${Math.round(Math.min(ratio, 2) * 100)}%` : '100%'
+  const cls    = (() => {
+    switch (status) {
+      case COVERAGE_STATUSES.COVERED:        return 'coverage-row--covered'
+      case COVERAGE_STATUSES.STRETCHED:      return 'coverage-row--stretched'
+      case COVERAGE_STATUSES.OVERLOADED:     return 'coverage-row--overloaded'
+      case COVERAGE_STATUSES.BREAKDOWN_RISK: return 'coverage-row--breakdown'
+      default:                                return ''
+    }
+  })()
+  return (
+    <div className={`coverage-row ${cls}`}>
+      <span className="coverage-row-label">Coverage</span>
+      <span className="coverage-row-value">{pct}</span>
+      <span className="coverage-row-status">{status}</span>
     </div>
   )
 }
@@ -102,7 +139,8 @@ export default function PortfolioSummary() {
         </div>
       </div>
 
-      <PropertyTypeBar properties={state.properties} staffCount={state.staffCount || 0} />
+      <PropertyTypeBar properties={state.properties} state={state} />
+      <CoverageStatusRow state={state} />
     </section>
   )
 }

@@ -4,7 +4,8 @@ import { advanceMonth, setPaused } from '../core/gameEngine.js'
 import { formatMonthLabel } from '../core/timeSystem.js'
 import { countAffordableTypes } from '../systems/propertySystem.js'
 import { getMaxRefiNetCash } from '../systems/loanSystem.js'
-import { calcCurrentStaffCost } from '../systems/staffSystem.js'
+import { getCurrentStaffCostByRole, getTotalStaffExpense, canHireStaffRole } from '../systems/staffSystem.js'
+import { STAFF_ROLE_ORDER } from '../data/staffRules.js'
 import { getAvailableUpgrades } from '../systems/eventSystem.js'
 import { formatShort } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
@@ -129,9 +130,10 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
     [state.properties, state.marketInterestRate]
   )
 
-  const staffCostPerHire = calcCurrentStaffCost(state.currentMonth)
-  const netCF            = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
-  const staffAffordable  = Math.max(0, Math.floor(netCF / staffCostPerHire))
+  // Staff affordability — count distinct roles the player can currently hire.
+  // Badge reads "N Roles Available" so the player knows multiple options exist.
+  const hireableRoles = STAFF_ROLE_ORDER.filter(r => canHireStaffRole(state, r))
+  const staffAffordable = hireableRoles.length
 
   const btnMeta = {
     invest: {
@@ -148,7 +150,7 @@ export default function ActionPanel({ onInvest, onStaff, onManage, onRefinance, 
     },
     staff: {
       disabled: staffAffordable === 0,
-      badges:   staffAffordable > 0 ? [`${staffAffordable} Available`] : [],
+      badges:   staffAffordable > 0 ? [`${staffAffordable} Role${staffAffordable !== 1 ? 's' : ''} Available`] : [],
     },
   }
 

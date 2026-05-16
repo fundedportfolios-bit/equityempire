@@ -4,7 +4,14 @@ import { calculateNetCashFlow, calculateMortgagePayment } from '../utils/finance
 import { createPropertyInstance, recalculatePortfolioTotals,
          computeBlendedValue }                               from '../systems/propertySystem.js'
 import { processMonthlyEvents, attachStartupActions } from '../systems/eventSystem.js'
-import { processStaffResolution, calcStaffExpense } from '../systems/staffSystem.js'
+import {
+  processStaffMonthlyResolution,
+  getTotalStaffExpense,
+  getStaffCounts,
+  getCurrentStaffCostByRole,
+  getStaffStatus,
+} from '../systems/staffSystem.js'
+import { DEFAULT_STAFF, STAFF_ROLES, COVERAGE_STATUSES } from '../data/staffRules.js'
 import { selectTriviaQuestion } from '../systems/triviaSystem.js'
 import { TRIVIA_RULES } from '../data/triviaRules.js'
 
@@ -33,9 +40,10 @@ export const INITIAL_STATE = {
   difficulty: 'medium',
   gameSpeed: 1,
 
-  // Staff
-  staffCount:   0,
+  // Staff (workload-points model)
+  staff:        { ...DEFAULT_STAFF },
   staffExpense: 0,
+  lastStaffStatus: 'No Staff',  // throttles "backlog warning" alerts to once per status change
 
   // Trivia
   activeTriviaQuestion:  null,
@@ -125,17 +133,42 @@ export function gameReducer(state, action) {
 
       const newMonth = state.currentMonth + 1
 
-      // Staff auto-resolution (after appreciation, before cash update)
+      // Staff auto-resolution (workload-points model — after appreciation, before cash update)
       const preStaffTotals = recalculatePortfolioTotals(updatedProperties, newMonth)
-      const { resolvedProperties, staffAlerts } = processStaffResolution(
-        updatedProperties, state.staffCount || 0, preStaffTotals.portfolioValue
-      )
+      const preStaffState  = { ...state, properties: updatedProperties, currentMonth: newMonth }
+      const {
+        resolvedProperties,
+        staffAlerts,
+        cashSpent: staffCashSpent,
+      } = processStaffMonthlyResolution(preStaffState)
 
-      // Staff expense recalculated at new month (raises apply)
-      const newStaffExpense = calcStaffExpense(state.staffCount || 0, newMonth)
+      // Staff expense recalculated at new month (raises apply per role)
+      const newStaffExpense = getTotalStaffExpense({ staff: state.staff, currentMonth: newMonth })
 
+      // Backlog warning — throttled: only fire when status worsens into a problem tier.
+      const postStaffSnapshot = {
+        staff:           state.staff,
+        properties:      resolvedProperties,
+        monthlyIncome:   preStaffTotals.monthlyIncome,
+        monthlyExpenses: preStaffTotals.monthlyExpenses,
+        currentMonth:    newMonth,
+      }
+      const newStaffStatus    = getStaffStatus(postStaffSnapshot)
+      const backlogStatuses   = [COVERAGE_STATUSES.STRETCHED, COVERAGE_STATUSES.OVERLOADED, COVERAGE_STATUSES.BREAKDOWN_RISK]
+      const wasBacklog        = backlogStatuses.includes(state.lastStaffStatus)
+      const nowBacklog        = backlogStatuses.includes(newStaffStatus)
+      if (nowBacklog && (!wasBacklog || newStaffStatus !== state.lastStaffStatus)) {
+        staffAlerts.push({
+          id:      `staff-backlog-${Date.now()}`,
+          message: `Operations team is ${newStaffStatus.toLowerCase()} — routine issues may age into urgent ones.`,
+          type:    'warning',
+        })
+      }
+
+      // Staff repair-cost deductions (urgent/critical auto-resolutions still
+      // charge the rolled repair cost) are subtracted on top of monthly CF.
       const netCashFlow = state.monthlyIncome - state.monthlyExpenses - newStaffExpense
-      const newCash     = state.cash + netCashFlow
+      const newCash     = state.cash + netCashFlow - (staffCashSpent || 0)
       const totals      = recalculatePortfolioTotals(resolvedProperties, newMonth)
 
       // Pause if any newly-spawned OR newly-escalated critical event remains after staff resolution
@@ -207,6 +240,7 @@ export function gameReducer(state, action) {
         monthlyIncome:         totals.monthlyIncome,
         monthlyExpenses:       totals.monthlyExpenses,
         staffExpense:          newStaffExpense,
+        lastStaffStatus:       newStaffStatus,
         activeTriviaQuestion:  triviaQuestion,
         lastTriviaMonth:       shouldTriggerTrivia ? newMonth : (state.lastTriviaMonth ?? 0),
         usedTriviaQuestionIds: state.usedTriviaQuestionIds ?? [],
@@ -477,18 +511,23 @@ export function gameReducer(state, action) {
       }
     }
 
-    case 'HIRE_STAFF': {
-      const newCount   = (state.staffCount || 0) + 1
-      const newExpense = calcStaffExpense(newCount, state.currentMonth)
+    case 'HIRE_STAFF_ROLE': {
+      const { role } = action.payload
+      const cfg = STAFF_ROLES[role]
+      if (!cfg) return state
+
+      const currentStaff = getStaffCounts(state)
+      const newStaff     = { ...currentStaff, [role]: (currentStaff[role] || 0) + 1 }
+      const newExpense   = getTotalStaffExpense({ staff: newStaff, currentMonth: state.currentMonth })
       const alert = {
-        id:        `hire-staff-${Date.now()}`,
-        message:   `Staff hired. Monthly staff expense is now $${newExpense.toLocaleString()}.`,
+        id:        `hire-${role}-${Date.now()}`,
+        message:   `Hired 1 ${cfg.label}. Monthly staff expense is now $${newExpense.toLocaleString()}.`,
         type:      'success',
         timestamp: state.currentMonth,
       }
       return {
         ...state,
-        staffCount:   newCount,
+        staff:        newStaff,
         staffExpense: newExpense,
         alerts:       [alert, ...state.alerts].slice(0, 20),
       }
@@ -558,16 +597,39 @@ export function gameReducer(state, action) {
         }
         return { ...base, ...p }
       })
+      // Migrate staff shape: old scalar staffCount → new role object.
+      // Existing fullTime-equivalent staff are mapped to fullTime; the
+      // other three role buckets initialize to zero.
+      const migratedStaff = (() => {
+        if (saved.staff && typeof saved.staff === 'object') {
+          return { ...DEFAULT_STAFF, ...saved.staff }
+        }
+        if (typeof saved.staffCount === 'number' && saved.staffCount > 0) {
+          return { ...DEFAULT_STAFF, fullTime: saved.staffCount }
+        }
+        return { ...DEFAULT_STAFF }
+      })()
+      const migratedStaffExpense = getTotalStaffExpense({
+        staff:        migratedStaff,
+        currentMonth: saved.currentMonth || 1,
+      })
+
+      // Drop legacy fields from the spread to avoid polluting new state.
+      const { staffCount: _legacyStaffCount, staff: _legacyStaff, staffExpense: _legacyExp, ...savedRest } = saved
+
       return {
         ...INITIAL_STATE,
-        staffCount:            0,
+        staff:                 { ...DEFAULT_STAFF },
         staffExpense:          0,
+        lastStaffStatus:       'No Staff',
         activeTriviaQuestion:  null,
         lastTriviaMonth:       0,
         usedTriviaQuestionIds: [],
         marketInterestRate:    null,
         triviaEnabled:         true,
-        ...saved,
+        ...savedRest,
+        staff:         migratedStaff,
+        staffExpense:  migratedStaffExpense,
         cashFlowGoal:  action.payload.cashFlowGoal ?? saved.cashFlowGoal ?? 10000,
         properties:    migratedProperties,
         gameStarted:   true,

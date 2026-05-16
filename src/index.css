@@ -1607,15 +1607,14 @@ body {
   cursor: not-allowed;
 }
 
-/* ─── Staff Panel ──────────────────────────────────────────────── */
-.staff-stats-strip {
+/* ─── Staff Panel (workload model) ───────────────────────────── */
+.staff-summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--gap);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
   margin-bottom: 14px;
 }
-
-.staff-stat {
+.staff-summary-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1624,113 +1623,237 @@ body {
   flex-direction: column;
   gap: 4px;
 }
-
-.staff-stat-label {
-  font-size: 0.7rem;
+.staff-summary-card--status {
+  grid-column: span 2;
+  justify-content: center;
+}
+.staff-summary-label {
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
 }
-
-.staff-stat-value {
-  font-size: 1rem;
-  font-weight: 600;
+.staff-summary-value {
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--text);
 }
 
-.staff-status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  gap: 10px;
-}
-
-.staff-status-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
 .staff-status-badge {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 12px;
   white-space: nowrap;
+  display: inline-block;
 }
-
-.staff-status-badge--adequate {
+.staff-status-badge--none {
+  background: rgba(125,149,176,0.1);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.staff-status-badge--covered {
   background: rgba(34,197,94,0.15);
   color: var(--positive);
   border: 1px solid rgba(34,197,94,0.3);
 }
-
+.staff-status-badge--stretched {
+  background: rgba(250,204,21,0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(250,204,21,0.3);
+}
 .staff-status-badge--overloaded {
   background: rgba(245,158,11,0.15);
   color: var(--warning);
   border: 1px solid rgba(245,158,11,0.3);
 }
-
-.staff-status-badge--no-staff {
-  background: rgba(125,149,176,0.1);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+.staff-status-badge--breakdown {
+  background: rgba(239,68,68,0.15);
+  color: var(--negative);
+  border: 1px solid rgba(239,68,68,0.35);
 }
 
-.staff-hire-section {
+.staff-backlog-warning {
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  color: var(--warning);
+  margin-bottom: 14px;
+  line-height: 1.45;
+}
+
+.staff-section {
+  margin-bottom: 16px;
+}
+.staff-section-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.staff-workload-grid {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 14px;
-  margin-bottom: 14px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
-
-.staff-hire-detail {
+.staff-workload-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.staff-hire-label {
-  font-size: 0.8rem;
+  padding: 4px 0;
+  font-size: 0.82rem;
   color: var(--text-muted);
 }
-
-.staff-hire-value {
-  font-size: 0.9rem;
-  font-weight: 600;
+.staff-workload-row > span:last-child { color: var(--text); font-weight: 600; }
+.staff-workload-row--total {
+  font-weight: 700;
   color: var(--text);
 }
-
-.staff-hire-btn {
-  width: 100%;
-  margin-top: 2px;
+.staff-workload-row--total > span:last-child { font-weight: 700; }
+.staff-workload-row--divider {
+  height: 1px;
+  background: var(--border);
+  padding: 0;
+  margin: 6px 0;
 }
 
-.staff-hire-reason {
-  font-size: 0.75rem;
-  color: var(--negative);
-  text-align: center;
-  margin: 0;
+.staff-roster-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
 }
-
-.staff-blurb {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  line-height: 1.55;
-  margin: 0;
-  padding: 12px 14px;
+.staff-roster-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  padding: 8px 10px;
 }
+.staff-roster-icon { font-size: 1.3rem; }
+.staff-roster-icon.prop-icon-img { width: 28px; height: 28px; }
+.staff-roster-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.staff-roster-label { font-size: 0.7rem; color: var(--text-muted); line-height: 1; }
+.staff-roster-count { font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1; }
+
+/* ─── Hire role card ─────────────────────────────────────────── */
+.hire-role-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 540px) {
+  .hire-role-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.hire-role-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hire-role-card--disabled { opacity: 0.65; }
+
+.hire-role-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hire-role-icon { font-size: 1.5rem; }
+.hire-role-icon.prop-icon-img { width: 32px; height: 32px; }
+.hire-role-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.hire-role-name { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+.hire-role-count { font-size: 0.7rem; color: var(--text-muted); }
+.hire-role-cost {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.hire-role-blurb {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+.hire-role-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hire-role-bullets li {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.hire-role-bullets strong { color: var(--text); }
+
+.hire-role-btn { width: 100%; }
+.hire-role-disabled-msg {
+  font-size: 0.72rem;
+  color: var(--negative);
+  margin: 0;
+  text-align: center;
+}
+
+/* ─── Portfolio summary: 4 role chips + coverage ─────────────── */
+.ptb-staff-group {
+  display: flex;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+  align-items: center;
+}
+.ptb-staff-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.coverage-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  margin-top: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+}
+.coverage-row-label { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.65rem; }
+.coverage-row-value { font-weight: 700; color: var(--text); }
+.coverage-row-status { margin-left: auto; font-weight: 600; }
+.coverage-row--covered    .coverage-row-status { color: var(--positive); }
+.coverage-row--stretched  .coverage-row-status { color: #fbbf24; }
+.coverage-row--overloaded .coverage-row-status { color: var(--warning); }
+.coverage-row--breakdown  .coverage-row-status { color: var(--negative); }
 
 /* ─── Trivia Modal ─────────────────────────────────────────────── */
 .trivia-overlay {
