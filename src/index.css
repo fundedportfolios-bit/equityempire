@@ -604,6 +604,12 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 .hdr-btn:hover { background: var(--bg-elevated); color: var(--text); }
+.hdr-btn--disabled,
+.hdr-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;  /* skip the hover state */
+}
 .hdr-btn-icon  { font-size: 14px; line-height: 1; flex-shrink: 0; }
 .hdr-btn-text  { letter-spacing: 0.02em; }
 
