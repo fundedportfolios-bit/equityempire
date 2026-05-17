@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useGame } from '../core/gameState.js'
-import { refinanceBatch, sellPropertiesBatch } from '../core/gameEngine.js'
+import { refinanceBatch, sellPropertiesBatch, payOffLoansBatch } from '../core/gameEngine.js'
 import { calculateRefinanceOptions, getMaxRefiNetCash, calcSaleProceeds } from '../systems/loanSystem.js'
+import { calculateMortgagePayment } from '../utils/financeMath.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
 
@@ -164,22 +165,89 @@ function BatchSellRow({ property, saleData, isChecked, onToggle }) {
   )
 }
 
+// ─── Batch payoff row ────────────────────────────────────────
+function BatchPayoffRow({ property, availableCash, isChecked, onToggle }) {
+  const loanBalance = property.loanBalance || 0
+  const oldPI       = Math.round(property.monthlyDebtService || 0)
+  const oldExpenses = property.monthlyExpenses || 0
+  const oldCF       = (property.monthlyRent || 0) - oldExpenses
+  // After full payoff: monthly debt service → 0, expenses drop by oldPI
+  const newExp      = Math.max(0, oldExpenses - oldPI)
+  const newCF       = (property.monthlyRent || 0) - newExp
+  const cfDelta     = newCF - oldCF
+  const affordable  = availableCash >= loanBalance
+  const canSelect   = loanBalance > 0 && affordable
+
+  return (
+    <div className={`refi-picker-card refi-picker-card--batch${!canSelect ? ' refi-picker-card--ineligible' : ''}${isChecked ? ' refi-picker-card--checked' : ''}`}>
+      <div className="refi-batch-row-top">
+        <span className={`refi-batch-checkbox${isChecked ? ' refi-batch-checkbox--on' : ''}`}>
+          {isChecked ? '✓' : ''}
+        </span>
+        <PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} className="refi-picker-icon" />
+        <div className="refi-picker-name">
+          <div className="refi-picker-prop-name">{property.name}</div>
+          <div className="refi-picker-mo-owned">
+            {oldPI > 0 ? formatCurrency(oldPI) : '$0'}/mo debt service
+          </div>
+        </div>
+      </div>
+      <div className="refi-batch-sell-row">
+        <div className="refi-batch-sell-stat">
+          <span className="refi-batch-sell-label">Loan balance</span>
+          <span>{formatShort(loanBalance)}</span>
+        </div>
+        <div className="refi-batch-sell-stat">
+          <span className="refi-batch-sell-label">Payoff cost</span>
+          <span className={affordable ? '' : 'negative'}>{formatCurrency(loanBalance)}</span>
+        </div>
+        <div className="refi-batch-sell-stat">
+          <span className="refi-batch-sell-label">CF change</span>
+          <span className={cfDelta >= 0 ? 'positive' : 'negative'}>
+            {cfDelta >= 0 ? '+' : ''}{formatCurrency(cfDelta)}/mo
+          </span>
+        </div>
+      </div>
+      <button
+        className={`btn btn-sm refi-batch-sell-toggle${isChecked ? ' btn-primary' : ''}`}
+        onClick={onToggle}
+        disabled={!canSelect}
+        title={loanBalance === 0
+          ? 'No loan to pay off'
+          : !affordable
+            ? `Need ${formatCurrency(loanBalance - availableCash)} more cash`
+            : `Pay off ${property.name}`}
+      >
+        {loanBalance === 0
+          ? 'No loan'
+          : !affordable
+            ? `Not enough cash`
+            : isChecked
+              ? 'Selected for payoff ✓'
+              : 'Mark to pay off'}
+      </button>
+    </div>
+  )
+}
+
 // ─── Modal ────────────────────────────────────────────────────
 export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
   const { state, dispatch } = useGame()
   const refiRate = (state.marketInterestRate ?? 0.0678) + 0.012
 
-  // Three modes: 'default' | 'batchRefi' | 'batchSell'
+  // Four modes: 'default' | 'batchRefi' | 'batchSell' | 'batchPayoff'
   const [mode, setMode]                         = useState('default')
   const [refiSelections, setRefiSelections]     = useState({})  // propertyId → tierId
   const [sellSelections, setSellSelections]     = useState({})  // propertyId → true
+  const [payoffSelections, setPayoffSelections] = useState({})  // propertyId → true
 
   const canShowBatch = state.portfolioValue >= 2_000_000
 
   // Sorting:
-  //   default    → by equity desc (existing behavior)
-  //   batchRefi  → by max refi net cash desc (most cash up top)
-  //   batchSell  → by (cashFlow / currentValue) asc (weakest performers up top)
+  //   default     → by equity desc (existing behavior)
+  //   batchRefi   → by max refi net cash desc (most cash up top)
+  //   batchSell   → by (cashFlow / currentValue) asc (weakest performers up top)
+  //   batchPayoff → by loanBalance desc (most debt up top)
   const sorted = useMemo(() => {
     const arr = [...state.properties]
     if (mode === 'batchRefi') {
@@ -191,6 +259,9 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
         return ((p.monthlyRent || 0) - (p.monthlyExpenses || 0)) / p.currentValue
       }
       return arr.sort((a, b) => yieldOf(a) - yieldOf(b))
+    }
+    if (mode === 'batchPayoff') {
+      return arr.sort((a, b) => (b.loanBalance || 0) - (a.loanBalance || 0))
     }
     // default
     return arr.sort((a, b) => (b.currentValue - b.loanBalance) - (a.currentValue - a.loanBalance))
@@ -237,22 +308,48 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
   const totalSellProceeds = sales.reduce((s, x) => s + x.netProceeds, 0)
   const canConfirmSell    = sales.length > 0
 
+  // ── Batch payoff payload ──
+  const payoffs = useMemo(() => {
+    return Object.entries(payoffSelections)
+      .map(([propertyId, on]) => {
+        if (!on) return null
+        const property = state.properties.find(p => p.id === propertyId)
+        if (!property || !property.loanBalance) return null
+        return {
+          propertyId,
+          amount:    property.loanBalance,
+          name:      property.name,
+          cfDelta:   Math.round(property.monthlyDebtService || 0),  // savings from killing P&I
+        }
+      })
+      .filter(Boolean)
+  }, [payoffSelections, state.properties])
+
+  const totalPayoffCost  = payoffs.reduce((s, p) => s + p.amount, 0)
+  const totalPayoffCFDelta = payoffs.reduce((s, p) => s + p.cfDelta, 0)
+  const canConfirmPayoff = payoffs.length > 0 && state.cash >= totalPayoffCost
+
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
 
-  function enterBatchRefi() { setMode('batchRefi') }
-  function enterBatchSell() { setMode('batchSell') }
+  function enterBatchRefi()   { setMode('batchRefi') }
+  function enterBatchSell()   { setMode('batchSell') }
+  function enterBatchPayoff() { setMode('batchPayoff') }
   function exitBatch() {
     setMode('default')
     setRefiSelections({})
     setSellSelections({})
+    setPayoffSelections({})
   }
   function setRefiTierFor(propertyId, tierId) {
     setRefiSelections(prev => ({ ...prev, [propertyId]: tierId }))
   }
   function toggleSellFor(propertyId) {
     setSellSelections(prev => ({ ...prev, [propertyId]: !prev[propertyId] }))
+  }
+  function togglePayoffFor(propertyId) {
+    setPayoffSelections(prev => ({ ...prev, [propertyId]: !prev[propertyId] }))
   }
   function handleConfirmRefi() {
     if (!canConfirmRefi) return
@@ -264,13 +361,18 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
     dispatch(sellPropertiesBatch(sales.map(s => ({ propertyId: s.propertyId, netProceeds: s.netProceeds }))))
     onClose()
   }
+  function handleConfirmPayoff() {
+    if (!canConfirmPayoff) return
+    dispatch(payOffLoansBatch(payoffs.map(p => ({ propertyId: p.propertyId, amount: p.amount }))))
+    onClose()
+  }
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-sheet">
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">Refinance / Sell</h2>
+            <h2 className="modal-title">Manage Equity — Refinance, Pay Down, Sell</h2>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>
               {' · '}Rate: <strong>{((refiRate) * 100).toFixed(2)}%</strong>
@@ -281,6 +383,9 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
               <>
                 <button className="btn btn-sm btn-primary refi-batch-toggle-btn" onClick={enterBatchRefi}>
                   Batch Refinance
+                </button>
+                <button className="btn btn-sm btn-primary refi-batch-toggle-btn" onClick={enterBatchPayoff}>
+                  Batch Pay Off
                 </button>
                 <button className="btn btn-sm btn-danger refi-batch-toggle-btn" onClick={enterBatchSell}>
                   Batch Sell
@@ -317,6 +422,16 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
                 saleData={calcSaleProceeds(property)}
                 isChecked={!!sellSelections[property.id]}
                 onToggle={() => toggleSellFor(property.id)}
+              />
+            ))
+          ) : mode === 'batchPayoff' ? (
+            sorted.map(property => (
+              <BatchPayoffRow
+                key={property.id}
+                property={property}
+                availableCash={state.cash}
+                isChecked={!!payoffSelections[property.id]}
+                onToggle={() => togglePayoffFor(property.id)}
               />
             ))
           ) : (
@@ -361,6 +476,28 @@ export default function PortfolioRefiModal({ onSelectProperty, onClose }) {
               onClick={handleConfirmSell}
             >
               Confirm — sell {sales.length}
+            </button>
+          </div>
+        )}
+
+        {mode === 'batchPayoff' && (
+          <div className="refi-batch-footer">
+            <div className="refi-batch-summary">
+              <span><strong>{payoffs.length}</strong> selected</span>
+              <span>·</span>
+              <span>Total payoff: <strong className={state.cash >= totalPayoffCost ? '' : 'negative'}>{formatCurrency(totalPayoffCost)}</strong></span>
+              <span>·</span>
+              <span>CF change: <strong className={totalPayoffCFDelta > 0 ? 'positive' : ''}>+{formatCurrency(totalPayoffCFDelta)}/mo</strong></span>
+            </div>
+            <button
+              className="btn btn-primary refi-batch-confirm-btn"
+              disabled={!canConfirmPayoff}
+              onClick={handleConfirmPayoff}
+              title={!canConfirmPayoff && payoffs.length > 0
+                ? `Need ${formatCurrency(totalPayoffCost - state.cash)} more cash`
+                : `Pay off ${payoffs.length} loan${payoffs.length !== 1 ? 's' : ''}`}
+            >
+              Confirm — pay off {payoffs.length}
             </button>
           </div>
         )}

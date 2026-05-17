@@ -592,6 +592,117 @@ export function gameReducer(state, action) {
       }
     }
 
+    case 'PAY_DOWN_LOAN': {
+      const { propertyId: payProp, amount } = action.payload
+      const target = state.properties.find(p => p.id === payProp)
+      if (!target) return state
+
+      const reqAmount = Math.max(0, Math.min(amount || 0, target.loanBalance || 0))
+      if (reqAmount <= 0)             return state
+      if (state.cash < reqAmount)     return state
+
+      const rate      = target.interestRate ?? 0.08
+      const term      = target.loanTermMonths ?? 360
+      const newBalance = (target.loanBalance || 0) - reqAmount
+      const newPI      = Math.round(calculateMortgagePayment(newBalance, rate, term))
+      const oldPI      = Math.round(target.monthlyDebtService || 0)
+      const newExp     = Math.max(0, (target.monthlyExpenses || 0) - oldPI + newPI)
+
+      const updatedProps = state.properties.map(p => {
+        if (p.id !== payProp) return p
+        return {
+          ...p,
+          loanBalance:        newBalance,
+          monthlyDebtService: newPI,
+          monthlyExpenses:    newExp,
+        }
+      })
+      const totals = recalculatePortfolioTotals(updatedProps, state.currentMonth)
+      const wasFull = newBalance === 0
+      const payDownAlert = {
+        id:        `paydown-${payProp}-${Date.now()}`,
+        message:   wasFull
+          ? `Paid off ${target.name} — $${reqAmount.toLocaleString()} applied. Monthly debt service eliminated.`
+          : `Paid down ${target.name} — $${reqAmount.toLocaleString()} applied. Loan balance now $${newBalance.toLocaleString()}.`,
+        type:      'success',
+        timestamp: state.currentMonth,
+      }
+      return {
+        ...state,
+        cash:            state.cash - reqAmount,
+        properties:      updatedProps,
+        portfolioValue:  totals.portfolioValue,
+        totalDebt:       totals.totalDebt,
+        monthlyIncome:   totals.monthlyIncome,
+        monthlyExpenses: totals.monthlyExpenses,
+        alerts:          [payDownAlert, ...state.alerts].slice(0, 20),
+      }
+    }
+
+    case 'PAY_OFF_LOANS_BATCH': {
+      const { payoffs } = action.payload
+      if (!Array.isArray(payoffs) || payoffs.length === 0) return state
+
+      // Resolve actual payoff amounts per property (cap at loanBalance).
+      const resolved = payoffs
+        .map(po => {
+          const target = state.properties.find(p => p.id === po.propertyId)
+          if (!target) return null
+          const amt = Math.max(0, Math.min(po.amount || target.loanBalance || 0, target.loanBalance || 0))
+          if (amt <= 0) return null
+          return { propertyId: po.propertyId, amount: amt, target }
+        })
+        .filter(Boolean)
+      if (resolved.length === 0) return state
+
+      const totalCost = resolved.reduce((s, r) => s + r.amount, 0)
+      if (state.cash < totalCost) {
+        const noFundsAlert = {
+          id:        `nofunds-batch-payoff-${Date.now()}`,
+          message:   `Not enough cash for batch loan payoff. Need $${totalCost.toLocaleString()}.`,
+          type:      'error',
+          timestamp: state.currentMonth,
+        }
+        return { ...state, alerts: [noFundsAlert, ...state.alerts].slice(0, 20) }
+      }
+
+      const byId = new Map(resolved.map(r => [r.propertyId, r]))
+      const updatedBatchProps = state.properties.map(p => {
+        const r = byId.get(p.id)
+        if (!r) return p
+        const rate     = p.interestRate ?? 0.08
+        const term     = p.loanTermMonths ?? 360
+        const newBal   = (p.loanBalance || 0) - r.amount
+        const newPI    = Math.round(calculateMortgagePayment(newBal, rate, term))
+        const oldPI    = Math.round(p.monthlyDebtService || 0)
+        const newExp   = Math.max(0, (p.monthlyExpenses || 0) - oldPI + newPI)
+        return {
+          ...p,
+          loanBalance:        newBal,
+          monthlyDebtService: newPI,
+          monthlyExpenses:    newExp,
+        }
+      })
+      const totals = recalculatePortfolioTotals(updatedBatchProps, state.currentMonth)
+      const count  = resolved.length
+      const batchPayoffAlert = {
+        id:        `batch-payoff-${Date.now()}`,
+        message:   `Paid off ${count} loan${count !== 1 ? 's' : ''} — $${totalCost.toLocaleString()} applied. Monthly debt service reduced.`,
+        type:      'success',
+        timestamp: state.currentMonth,
+      }
+      return {
+        ...state,
+        cash:            state.cash - totalCost,
+        properties:      updatedBatchProps,
+        portfolioValue:  totals.portfolioValue,
+        totalDebt:       totals.totalDebt,
+        monthlyIncome:   totals.monthlyIncome,
+        monthlyExpenses: totals.monthlyExpenses,
+        alerts:          [batchPayoffAlert, ...state.alerts].slice(0, 20),
+      }
+    }
+
     case 'CLOSE_TRIVIA': {
       const { reward, dismissed } = action.payload
       const newAlerts = dismissed

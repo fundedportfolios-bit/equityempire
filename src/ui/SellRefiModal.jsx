@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useGame } from '../core/gameState.js'
-import { sellProperty, refinanceProperty } from '../core/gameEngine.js'
+import { sellProperty, refinanceProperty, payDownLoan } from '../core/gameEngine.js'
 import { calculateRefinanceOptions, calcSaleProceeds, getMaxRefiNetCash } from '../systems/loanSystem.js'
+import { calculateMortgagePayment } from '../utils/financeMath.js'
 import { formatCurrency, formatShort } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
 
@@ -118,6 +120,147 @@ function SellCard({ saleData, onConfirm }) {
   )
 }
 
+function PayDownCard({ property, availableCash, onConfirm }) {
+  const loanBalance = property.loanBalance || 0
+  const rate        = property.interestRate ?? 0.08
+  const term        = property.loanTermMonths ?? 360
+  const oldPI       = Math.round(property.monthlyDebtService || 0)
+  const oldExpenses = property.monthlyExpenses || 0
+  const oldCF       = (property.monthlyRent || 0) - oldExpenses
+
+  // Slider range: 0 to min(cash, loanBalance). Default 0.
+  const sliderMax = Math.min(availableCash, loanBalance)
+  const [amount, setAmount] = useState(0)
+  const safeAmount = Math.min(Math.max(0, amount), sliderMax)
+
+  // Live preview of post-pay-down numbers.
+  const newBalance = Math.max(0, loanBalance - safeAmount)
+  const newPI      = Math.round(calculateMortgagePayment(newBalance, rate, term))
+  const newExp     = Math.max(0, oldExpenses - oldPI + newPI)
+  const newCF      = (property.monthlyRent || 0) - newExp
+  const cfDelta    = newCF - oldCF
+
+  const canPayOff = loanBalance > 0 && availableCash >= loanBalance
+  const canApply  = loanBalance > 0 && safeAmount > 0 && availableCash >= safeAmount
+
+  function handlePayOffClick() {
+    setAmount(loanBalance)
+  }
+
+  return (
+    <div className="refi-option-card refi-option-card--paydown">
+      <div className="refi-card-title">
+        Pay Down Loan
+        <span className="refi-card-meta">
+          {(rate * 100).toFixed(2)}% APR · {term / 12}-yr term
+        </span>
+      </div>
+
+      <div className="refi-detail-rows">
+        <div className="refi-detail-row">
+          <span>Current loan balance</span>
+          <span>{formatCurrency(loanBalance)}</span>
+        </div>
+        <div className="refi-detail-row">
+          <span>Current monthly P&amp;I</span>
+          <span>{formatCurrency(oldPI)}/mo</span>
+        </div>
+        <div className="refi-detail-row">
+          <span>Cash available</span>
+          <span>{formatCurrency(availableCash)}</span>
+        </div>
+      </div>
+
+      <div className="paydown-slider-wrap">
+        <div className="paydown-slider-header">
+          <span className="paydown-slider-label">Amount to apply</span>
+          <span className="paydown-slider-value">{formatCurrency(safeAmount)}</span>
+        </div>
+        <input
+          type="range"
+          className="paydown-slider"
+          min={0}
+          max={Math.max(sliderMax, 0)}
+          step={Math.max(100, Math.floor(sliderMax / 200) || 1)}
+          value={safeAmount}
+          onChange={(e) => setAmount(Number(e.target.value))}
+          disabled={sliderMax <= 0}
+        />
+        <div className="paydown-slider-row">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm paydown-payoff-btn"
+            onClick={handlePayOffClick}
+            disabled={!canPayOff}
+            title={canPayOff
+              ? `Apply ${formatCurrency(loanBalance)} to pay off this loan entirely`
+              : 'Not enough cash to pay off the full loan'}
+          >
+            Pay Off · {formatCurrency(loanBalance)}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setAmount(0)}
+            disabled={safeAmount === 0}
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <div className="refi-effect-section">
+        <div className="refi-effect-label">Monthly debt service</div>
+        <div className="refi-effect-row">
+          <span>{formatCurrency(oldPI)}/mo</span>
+          <span className="refi-arrow">→</span>
+          <span>{formatCurrency(newPI)}/mo</span>
+        </div>
+        <div className="refi-effect-label">Monthly cash flow</div>
+        <div className="refi-effect-row">
+          <span>{formatCurrency(oldCF)}/mo</span>
+          <span className="refi-arrow">→</span>
+          <span>{formatCurrency(newCF)}/mo</span>
+        </div>
+        <div className="refi-effect-delta">
+          {cfDelta === 0
+            ? <span className="cash-flow-delta neutral">No change</span>
+            : <span className={`cash-flow-delta ${cfDelta >= 0 ? 'positive' : 'negative'}`}>
+                {cfDelta >= 0 ? '+' : ''}{formatCurrency(cfDelta)}/mo
+              </span>
+          }
+        </div>
+        {newBalance > 0 && (
+          <div className="refi-effect-label paydown-note">
+            New loan balance: <strong>{formatCurrency(newBalance)}</strong>
+          </div>
+        )}
+        {newBalance === 0 && safeAmount > 0 && (
+          <p className="paydown-note paydown-note--success">
+            Loan fully paid off. Taxes, insurance, HOA, and any STR utilities remain.
+          </p>
+        )}
+      </div>
+
+      {loanBalance === 0 ? (
+        <p className="seasoning-note">This property has no remaining loan to pay down.</p>
+      ) : (
+        <button
+          className="btn btn-primary btn-sm refi-confirm-btn"
+          disabled={!canApply}
+          onClick={() => onConfirm(safeAmount)}
+        >
+          {safeAmount === loanBalance && safeAmount > 0
+            ? `Pay Off — ${formatCurrency(safeAmount)}`
+            : safeAmount > 0
+              ? `Apply ${formatCurrency(safeAmount)}`
+              : 'Pick an amount'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function SellRefiModal({ propertyId, onClose }) {
   const { state, dispatch } = useGame()
   const property = state.properties.find(p => p.id === propertyId)
@@ -150,6 +293,12 @@ export default function SellRefiModal({ propertyId, onClose }) {
     onClose()
   }
 
+  function handlePayDown(amount) {
+    if (!amount || amount <= 0) return
+    dispatch(payDownLoan(propertyId, amount))
+    onClose()
+  }
+
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
@@ -168,6 +317,9 @@ export default function SellRefiModal({ propertyId, onClose }) {
             <h2 className="modal-title">
               <PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} inline /> {property.name}
             </h2>
+            <p className="modal-subtitle modal-subtitle--equity">
+              Manage Equity — Refinance, Pay Down, Sell
+            </p>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>
             </p>
@@ -219,6 +371,15 @@ export default function SellRefiModal({ propertyId, onClose }) {
             <RefiCard option={lowRisk}  onConfirm={() => handleRefi(lowRisk)} />
             <RefiCard option={standard} onConfirm={() => handleRefi(standard)} />
             <RefiCard option={maxOpt}   onConfirm={() => handleRefi(maxOpt)} />
+          </section>
+
+          <section className="manage-section">
+            <h3 className="manage-section-title">Pay Down Loan</h3>
+            <PayDownCard
+              property={property}
+              availableCash={state.cash}
+              onConfirm={handlePayDown}
+            />
           </section>
 
           <section className="manage-section">

@@ -13,7 +13,7 @@ import PropertyIcon from './PropertyIcon.jsx'
 const ACTIONS = [
   { id: 'invest',    label: 'Invest',    icon: '🏠' },
   { id: 'upgrade',   label: 'Upgrade',   icon: '🔧' },
-  { id: 'refinance', label: 'Refinance', icon: '💰' },
+  { id: 'refinance', label: 'Manage Equity', icon: '💰' },
   { id: 'staff',     label: 'Staff',     icon: '👤', iconImage: '/icons/staff.png' },
   { id: 'trivia',    label: 'Trivia',    icon: '🎓', isToggle: true },
 ]

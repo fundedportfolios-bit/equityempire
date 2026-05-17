@@ -76,7 +76,7 @@ export default function PropertyCard({ property, onUpgrade, onSellRefi }) {
           className="btn btn-outline btn-sm property-sellrefi-btn"
           onClick={() => onSellRefi(property.id)}
         >
-          Sell / Refi
+          Equity
         </button>
       </div>
     </div>

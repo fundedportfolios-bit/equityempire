@@ -109,6 +109,18 @@ export function refinanceBatch(refis) {
   return { type: 'REFINANCE_BATCH', payload: { refis } }
 }
 
+export function payDownLoan(propertyId, amount) {
+  // Reduce loanBalance by `amount`, recompute P&I + monthlyExpenses.
+  // `amount` ≤ player cash and ≤ current loanBalance (caller enforces).
+  return { type: 'PAY_DOWN_LOAN', payload: { propertyId, amount } }
+}
+
+export function payOffLoansBatch(payoffs) {
+  // payoffs: Array<{ propertyId, amount }>
+  // Each entry pays the full remaining loanBalance of that property.
+  return { type: 'PAY_OFF_LOANS_BATCH', payload: { payoffs } }
+}
+
 export function hireStaff() {
   // Legacy single-role hire — defaults to fullTime so any old call sites
   // (and old game saves) still work after the workload-model refactor.
