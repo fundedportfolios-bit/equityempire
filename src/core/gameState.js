@@ -12,6 +12,21 @@ import {
   getStaffStatus,
 } from '../systems/staffSystem.js'
 import { DEFAULT_STAFF, STAFF_ROLES, COVERAGE_STATUSES } from '../data/staffRules.js'
+import {
+  REPORTING_DEFAULTS,
+  initializeReportingState,
+  migrateReporting,
+  recordMonthlySnapshot,
+  recordPropertyPurchase,
+  recordRefinance,
+  recordPropertySale,
+  recordUpgradeCompleted,
+  recordStaffHire,
+  recordMaintenanceResolved,
+  recordTriviaResult,
+  recordLoanPayoff,
+  saveReportRequest,
+} from '../systems/reportingSystem.js'
 import { selectTriviaQuestion } from '../systems/triviaSystem.js'
 import { TRIVIA_RULES } from '../data/triviaRules.js'
 
@@ -70,6 +85,9 @@ export const INITIAL_STATE = {
   winner: false,
   tutorialSeen: false,  // set true after first completion/skip; persists with save
 
+  // Reporting (captures gameplay data for the future emailed game report)
+  reporting: REPORTING_DEFAULTS,
+
   // Invest modal tracking
   investOpenCount: 0,
 }
@@ -84,6 +102,12 @@ export function gameReducer(state, action) {
         cashFlowGoal:  action.payload.cashFlowGoal || 10000,
         cash:          settings.startingCash,
         gameStarted:   true,
+        // Seed reporting with starting cash + month so the report can show
+        // "started with X, ended with Y" later.
+        reporting: initializeReportingState({
+          startingCash:  settings.startingCash,
+          startingMonth: 1,
+        }),
         alerts: [
           {
             id: 'welcome',
@@ -244,7 +268,8 @@ export function gameReducer(state, action) {
         ?? (justBillionaire ? 'billionaire' : null)
       const milestoneOrWin = newMilestone || justWon
 
-      return {
+      // Build the post-month state, then record a reporting snapshot.
+      const advancedState = {
         ...state,
         currentMonth:          newMonth,
         cash:                  newCash,
@@ -267,6 +292,7 @@ export function gameReducer(state, action) {
         cashFlowMilestoneHit:  state.cashFlowMilestoneHit || justHitHalfwayCF,
         billionaireSeen:       state.billionaireSeen || justBillionaire,
       }
+      return { ...advancedState, reporting: recordMonthlySnapshot(advancedState) }
     }
 
     case 'BUY_PROPERTY': {
@@ -286,7 +312,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const buyState = {
         ...state,
         cash:            newCash,
         properties:      newProperties,
@@ -296,6 +322,18 @@ export function gameReducer(state, action) {
         monthlyExpenses: totals.monthlyExpenses,
         alerts:          [alert, ...state.alerts].slice(0, 20),
         isPaused:        hasCriticalStartup ? true : state.isPaused,
+      }
+      const downPayment  = Math.round((option.purchasePrice || 0) * ((option.downPaymentPercent ?? 0) / 100))
+      const closingCosts = Math.round((option.purchasePrice || 0) * ((option.closingCostPercent  ?? 0) / 100))
+      return {
+        ...buyState,
+        reporting: recordPropertyPurchase(buyState, {
+          property:    newProperty,
+          option,
+          cashNeeded:  option.cashNeeded,
+          downPayment,
+          closingCosts,
+        }),
       }
     }
 
@@ -349,7 +387,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const resolveState = {
         ...state,
         cash:            state.cash - instance.rolledCost,
         properties:      updatedProperties,
@@ -359,6 +397,14 @@ export function gameReducer(state, action) {
         monthlyExpenses: totals.monthlyExpenses,
         alerts:          [resolveAlert, ...state.alerts].slice(0, 20),
         isPaused:        stillHasCritical ? state.isPaused : false,
+      }
+      return {
+        ...resolveState,
+        reporting: recordMaintenanceResolved(resolveState, {
+          property: targetProp,
+          event:    instance,
+          cost:     instance.rolledCost,
+        }),
       }
     }
 
@@ -401,7 +447,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const upgState = {
         ...state,
         cash:            state.cash - upgradeInstance.rolledCost,
         properties:      updatedProperties,
@@ -410,6 +456,16 @@ export function gameReducer(state, action) {
         monthlyIncome:   totals.monthlyIncome,
         monthlyExpenses: totals.monthlyExpenses,
         alerts:          [upgradeAlert, ...state.alerts].slice(0, 20),
+      }
+      return {
+        ...upgState,
+        reporting: recordUpgradeCompleted(upgState, {
+          property:        updatedProperties.find(p => p.id === propertyId),
+          upgradeInstance,
+          cost:            upgradeInstance.rolledCost,
+          incomeIncrease:  upgradeInstance.permanentRentBoost || 0,
+          valueIncrease:   upgradeInstance.permanentValueBoost || 0,
+        }),
       }
     }
 
@@ -458,7 +514,7 @@ export function gameReducer(state, action) {
         timestamp: state.currentMonth,
       }
 
-      return {
+      const batchUpgState = {
         ...state,
         cash:            state.cash - totalCost,
         properties:      updatedBatchProperties,
@@ -468,6 +524,22 @@ export function gameReducer(state, action) {
         monthlyExpenses: batchTotals.monthlyExpenses,
         alerts:          [batchAlert, ...state.alerts].slice(0, 20),
       }
+      // Record each upgrade instance in the batch.
+      let nextReporting = batchUpgState.reporting
+      const batchProperty = updatedBatchProperties.find(p => p.id === batchPropId)
+      for (const u of upgradeInstances) {
+        nextReporting = recordUpgradeCompleted(
+          { ...batchUpgState, reporting: nextReporting },
+          {
+            property:        batchProperty,
+            upgradeInstance: u,
+            cost:            u.rolledCost,
+            incomeIncrease:  u.permanentRentBoost || 0,
+            valueIncrease:   u.permanentValueBoost || 0,
+          }
+        )
+      }
+      return { ...batchUpgState, reporting: nextReporting }
     }
 
     case 'SELL_PROPERTY': {
@@ -483,7 +555,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const sellState = {
         ...state,
         cash:            state.cash + netProceeds,
         properties:      remainingProps,
@@ -492,6 +564,16 @@ export function gameReducer(state, action) {
         monthlyIncome:   sellTotals.monthlyIncome,
         monthlyExpenses: sellTotals.monthlyExpenses,
         alerts:          [sellAlert, ...state.alerts].slice(0, 20),
+      }
+      return {
+        ...sellState,
+        reporting: recordPropertySale(sellState, {
+          property:    soldProp,
+          salePrice:   soldProp.currentValue || 0,
+          sellingCosts:Math.round((soldProp.currentValue || 0) * 0.04),
+          loanPayoff:  soldProp.loanBalance || 0,
+          netProceeds,
+        }),
       }
     }
 
@@ -509,7 +591,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const batchSellState = {
         ...state,
         cash:            state.cash + totalProceeds,
         properties:      remainingPropsBatch,
@@ -519,6 +601,23 @@ export function gameReducer(state, action) {
         monthlyExpenses: batchSellTotals.monthlyExpenses,
         alerts:          [batchSellAlert, ...state.alerts].slice(0, 20),
       }
+      // Record each sale in the batch.
+      let nextSellReporting = batchSellState.reporting
+      for (const s of sales) {
+        const soldP = state.properties.find(p => p.id === s.propertyId)
+        if (!soldP) continue
+        nextSellReporting = recordPropertySale(
+          { ...batchSellState, reporting: nextSellReporting },
+          {
+            property:    soldP,
+            salePrice:   soldP.currentValue || 0,
+            sellingCosts:Math.round((soldP.currentValue || 0) * 0.04),
+            loanPayoff:  soldP.loanBalance || 0,
+            netProceeds: s.netProceeds || 0,
+          }
+        )
+      }
+      return { ...batchSellState, reporting: nextSellReporting }
     }
 
     case 'REFINANCE_PROPERTY': {
@@ -542,7 +641,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const refiState = {
         ...state,
         cash:            state.cash + netCash,
         properties:      refiProps,
@@ -551,6 +650,17 @@ export function gameReducer(state, action) {
         monthlyIncome:   refiTotals.monthlyIncome,
         monthlyExpenses: refiTotals.monthlyExpenses,
         alerts:          [refiAlert, ...state.alerts].slice(0, 20),
+      }
+      return {
+        ...refiState,
+        reporting: recordRefinance(refiState, {
+          property:               refiProp,
+          netCash,
+          oldLoanBalance:         refiProp.loanBalance,
+          newLoanBalance,
+          oldMonthlyDebtService:  refiProp.monthlyDebtService,
+          newMonthlyDebtService,
+        }),
       }
     }
 
@@ -580,7 +690,7 @@ export function gameReducer(state, action) {
         timestamp: state.currentMonth,
       }
 
-      return {
+      const batchRefiState = {
         ...state,
         properties:      refiProps,
         cash:            state.cash + totalCash,
@@ -590,6 +700,24 @@ export function gameReducer(state, action) {
         monthlyExpenses: totals.monthlyExpenses,
         alerts:          [batchAlert, ...state.alerts].slice(0, 20),
       }
+      // Record each refi in the batch.
+      let nextBatchReporting = batchRefiState.reporting
+      for (const r of refis) {
+        const oldP = state.properties.find(p => p.id === r.propertyId)
+        if (!oldP) continue
+        nextBatchReporting = recordRefinance(
+          { ...batchRefiState, reporting: nextBatchReporting },
+          {
+            property:              oldP,
+            netCash:               r.netCash || 0,
+            oldLoanBalance:        oldP.loanBalance,
+            newLoanBalance:        r.newLoanBalance,
+            oldMonthlyDebtService: oldP.monthlyDebtService,
+            newMonthlyDebtService: r.newMonthlyDebtService,
+          }
+        )
+      }
+      return { ...batchRefiState, reporting: nextBatchReporting }
     }
 
     case 'PAY_DOWN_LOAN': {
@@ -627,7 +755,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const payDownState = {
         ...state,
         cash:            state.cash - reqAmount,
         properties:      updatedProps,
@@ -636,6 +764,10 @@ export function gameReducer(state, action) {
         monthlyIncome:   totals.monthlyIncome,
         monthlyExpenses: totals.monthlyExpenses,
         alerts:          [payDownAlert, ...state.alerts].slice(0, 20),
+      }
+      return {
+        ...payDownState,
+        reporting: recordLoanPayoff(payDownState, { amount: reqAmount, fullyPaidOff: wasFull }),
       }
     }
 
@@ -691,7 +823,7 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const batchPayoffState = {
         ...state,
         cash:            state.cash - totalCost,
         properties:      updatedBatchProps,
@@ -700,6 +832,10 @@ export function gameReducer(state, action) {
         monthlyIncome:   totals.monthlyIncome,
         monthlyExpenses: totals.monthlyExpenses,
         alerts:          [batchPayoffAlert, ...state.alerts].slice(0, 20),
+      }
+      return {
+        ...batchPayoffState,
+        reporting: recordLoanPayoff(batchPayoffState, { amount: totalCost, fullyPaidOff: true }),
       }
     }
 
@@ -710,13 +846,21 @@ export function gameReducer(state, action) {
         : reward > 0
           ? [{ id: `kpu-reward-${Date.now()}`, message: `Knowledge Power-Up bonus: $${reward.toLocaleString()}`, type: 'success', timestamp: state.currentMonth }, ...state.alerts]
           : [{ id: `kpu-skip-${Date.now()}`,   message: 'Knowledge Power-Up answered — no bonus this time.',    type: 'info',    timestamp: state.currentMonth }, ...state.alerts]
-      return {
+      const triviaState = {
         ...state,
         cash:                  state.cash + reward,
         activeTriviaQuestion:  null,
         usedTriviaQuestionIds: [...(state.usedTriviaQuestionIds ?? []), state.activeTriviaQuestion?.id].filter(Boolean),
         isModalOpen:           false,
         alerts:                newAlerts.slice(0, 20),
+      }
+      return {
+        ...triviaState,
+        reporting: recordTriviaResult(triviaState, {
+          wasCorrect: !dismissed && reward > 0,
+          reward,
+          dismissed,
+        }),
       }
     }
 
@@ -734,11 +878,21 @@ export function gameReducer(state, action) {
         type:      'success',
         timestamp: state.currentMonth,
       }
-      return {
+      const hireState = {
         ...state,
         staff:        newStaff,
         staffExpense: newExpense,
         alerts:       [alert, ...state.alerts].slice(0, 20),
+      }
+      const totalStaffCountAfter =
+        newStaff.partTime + newStaff.fullTime + newStaff.seniorManager + newStaff.executiveOperator
+      return {
+        ...hireState,
+        reporting: recordStaffHire(hireState, {
+          role:                 cfg.label,
+          monthlyCost:          getCurrentStaffCostByRole(role, state.currentMonth),
+          totalStaffCountAfter,
+        }),
       }
     }
 
@@ -866,6 +1020,9 @@ export function gameReducer(state, action) {
         staffExpense:  migratedStaffExpense,
         cashFlowGoal:  action.payload.cashFlowGoal ?? saved.cashFlowGoal ?? 10000,
         properties:    migratedProperties,
+        // Migrate reporting: fill missing fields with defaults so older saves
+        // that predate this system still load cleanly.
+        reporting:     migrateReporting(saved.reporting),
         gameStarted:   true,
       }
     }
@@ -889,6 +1046,18 @@ export function gameReducer(state, action) {
 
     case 'MARK_TUTORIAL_SEEN':
       return { ...state, tutorialSeen: true }
+
+    case 'SUBMIT_REPORT_REQUEST': {
+      const { playerInfo } = action.payload || {}
+      if (!playerInfo) return state
+      // Log to console so we can validate the payload shape before email
+      // delivery is wired up.
+      const nextReporting = saveReportRequest(state, playerInfo)
+      const latest = nextReporting.reportRequests[nextReporting.reportRequests.length - 1]
+      // eslint-disable-next-line no-console
+      console.log('[Reporting] Report request saved:', latest)
+      return { ...state, reporting: nextReporting }
+    }
 
     default:
       return state

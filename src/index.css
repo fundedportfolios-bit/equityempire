@@ -3010,6 +3010,80 @@ body {
   .report-table th,
   .report-table td { padding: 6px 8px; font-size: 0.78rem; }
 }
+
+/* ─── Report Request form (replaces detailed display for now) ──── */
+.report-request-modal {
+  width: min(480px, 95vw);
+}
+.report-request-body {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 18px;
+  text-align: left;
+}
+.report-request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.report-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.report-form-row--checkbox {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.report-form-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.report-form-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.report-form-input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.95rem;
+  padding: 10px 12px;
+  outline: none;
+  width: 100%;
+}
+.report-form-input:focus {
+  border-color: #38bdf8;
+}
+.report-form-error {
+  color: var(--negative);
+  font-size: 0.78rem;
+}
+.report-form-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.report-form-checkbox input { margin-top: 3px; }
+.report-request-actions { margin-top: 8px; }
+.report-form-disclaimer {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 14px 0 0;
+  font-style: italic;
+}
 .report-close-btn {
   position: absolute;
   top: 16px;
