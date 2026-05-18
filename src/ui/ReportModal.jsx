@@ -81,10 +81,15 @@ export default function ReportModal({ onClose }) {
             <div className="win-confetti-row">📬 ✅</div>
             <h1 className="win-title report-title">Report On The Way</h1>
             <p className="report-request-body">
-              {pref === 'requestSupport'
-                ? 'Your detailed report is on the way. Since you asked for help applying this to real world investing, someone from Funded Portfolios may follow up.'
-                : 'Your detailed report is on the way. Check your inbox in a few minutes.'}
+              Your detailed report is on the way. Try checking your spam if you
+              don't see it soon.
             </p>
+            {pref === 'requestSupport' && (
+              <p className="report-request-body">
+                Since you asked for help applying this to real world investing,
+                someone from Funded Portfolios may follow up.
+              </p>
+            )}
             <div className="win-actions">
               <button className="win-btn-continue" onClick={onClose}>Resume Game</button>
             </div>
