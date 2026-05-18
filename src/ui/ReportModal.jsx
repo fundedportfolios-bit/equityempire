@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useGame } from '../core/gameState.js'
 import { createReportPayload } from '../systems/reportingSystem.js'
 import { formatShort, formatCashFlow } from '../utils/formatters.js'
+import { STAFF_ROLES, STAFF_ROLE_ORDER } from '../data/staffRules.js'
+import { getStaffCounts } from '../systems/staffSystem.js'
 
 // ⚠️  TEMPORARY INTERNAL TESTING MODE ⚠️
 // We do NOT collect the player's name/email yet and we do NOT email the
@@ -9,7 +11,8 @@ import { formatShort, formatCashFlow } from '../utils/formatters.js'
 // state and POST it to /api/sendReport, which (server-side) always emails
 // the formatted HTML report to the internal owner address only. The player
 // just sees the simple stats card below — same visual family as the
-// goal-achievement WinModal, intentionally minimal.
+// goal-achievement WinModal, intentionally minimal. The send happens
+// silently in the background — no status text is shown to the player.
 //
 // LATER: collect player name + email + consent here and let the backend
 // send the player their own copy.
@@ -23,46 +26,50 @@ function formatMonths(m) {
   return `${yrs} yr ${mos} mo`
 }
 
-// Highest portfolio-value milestone reached, for the "major milestone" line.
-function topMilestone(reporting) {
-  const map = reporting?.milestones?.portfolioValueMilestones || {}
-  const reached = Object.keys(map)
-    .filter(k => map[k] != null)
-    .map(Number)
-    .sort((a, b) => b - a)
-  if (reached.length === 0) return null
-  return `${formatShort(reached[0])} portfolio`
+// "3 Single LTR · 2 Micro Resort · 1 Apartment Complex"
+function buildPropertySummary(properties) {
+  if (!properties?.length) return 'No properties owned'
+  const counts = properties.reduce((acc, p) => {
+    const key = p.name || 'Property'
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, n]) => `${n} ${name}`)
+    .join(' · ')
+}
+
+// "2 Full Time Staff · 1 Senior Manager"
+function buildStaffSummary(state) {
+  const counts = getStaffCounts(state)
+  const parts = STAFF_ROLE_ORDER
+    .filter(role => (counts[role] || 0) > 0)
+    .map(role => `${counts[role]} ${STAFF_ROLES[role].label}`)
+  return parts.length ? parts.join(' · ') : 'No staff hired'
 }
 
 export default function ReportModal({ onClose }) {
   const { state } = useGame()
   const sentRef = useRef(false)
-  const [sendStatus, setSendStatus] = useState('sending') // 'sending' | 'sent' | 'error'
 
-  const netCashFlow = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
-  const equity      = (state.portfolioValue || 0) - (state.totalDebt || 0)
+  const netCashFlow  = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
+  const equity       = (state.portfolioValue || 0) - (state.totalDebt || 0)
   const monthsPlayed = Math.max(0, (state.currentMonth || 1) - 1)
-  const milestone    = topMilestone(state.reporting)
+  const propSummary  = buildPropertySummary(state.properties)
+  const staffSummary = buildStaffSummary(state)
 
-  // Fire the report send once, in the background. The player never sees
-  // backend details, the recipient address, or any logs.
+  // Fire the report send once, silently in the background. The player never
+  // sees backend details, the recipient address, send status, or any logs.
   useEffect(() => {
     if (sentRef.current) return
     sentRef.current = true
-
-    let cancelled = false
     const payload = createReportPayload(state, {})
-
     fetch('/api/sendReport', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ payload }),
-    })
-      .then(r => r.json().catch(() => ({ ok: false })))
-      .then(res => { if (!cancelled) setSendStatus(res?.ok ? 'sent' : 'error') })
-      .catch(() => { if (!cancelled) setSendStatus('error') })
-
-    return () => { cancelled = true }
+    }).catch(() => { /* silent — never surfaced to the player */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -85,9 +92,17 @@ export default function ReportModal({ onClose }) {
         <button className="modal-close-btn report-close-btn" onClick={onClose} aria-label="Close">×</button>
         <div className="win-confetti-row">📊 🏗️ 💼 📈 🏠</div>
         <h1 className="win-title report-title">Portfolio Snapshot</h1>
-        <p className="win-subtitle">
-          Month {monthsPlayed}{milestone ? ` · Top milestone: ${milestone}` : ''}
-        </p>
+
+        <div className="report-portfolio-summary">
+          <div className="report-summary-line">
+            <span className="report-summary-label">Properties</span>
+            <span className="report-summary-value">{propSummary}</span>
+          </div>
+          <div className="report-summary-line">
+            <span className="report-summary-label">Staff</span>
+            <span className="report-summary-value">{staffSummary}</span>
+          </div>
+        </div>
 
         <div className="win-stats-grid">
           {stats.map(s => (
@@ -97,12 +112,6 @@ export default function ReportModal({ onClose }) {
             </div>
           ))}
         </div>
-
-        <p className="report-send-status">
-          {sendStatus === 'sending' && '⏳ Preparing your detailed report…'}
-          {sendStatus === 'sent'    && '✅ Detailed report generated.'}
-          {sendStatus === 'error'   && 'ℹ️ Snapshot shown above. Detailed report will be available soon.'}
-        </p>
 
         <div className="win-actions">
           <button className="win-btn-continue" onClick={onClose}>Resume Game</button>
