@@ -70,8 +70,8 @@ export const TUTORIAL_STEPS = [
   },
   {
     id:                'refinance',
-    title:             'Refinance',
-    body:              'Tap Refinance to pull cash out of properties when they have enough value and meet seasoning rules. This is one of the main ways to scale.',
+    title:             'Manage Equity',
+    body:              'Tap Manage Equity to manage the amount of cash you have available to invest by selling, refinancing, or paying down your loans. This is one of the main ways to scale your portfolio.',
     target:            'action-refinance',
     placement:         'above',
     fallbackPlacement: 'center',
@@ -86,8 +86,8 @@ export const TUTORIAL_STEPS = [
   },
   {
     id:                'trivia',
-    title:             'Trivia',
-    body:              'Trivia can be turned on or off. When enabled, real estate questions appear during the game, and correct answers can earn cash bonuses.',
+    title:             'Knowledge Power Ups',
+    body:              'This button enables Trivia. Answering correctly results in increasingly large cash bonuses to help you meet your goals.',
     target:            'action-trivia',
     placement:         'above',
     fallbackPlacement: 'center',
@@ -102,8 +102,8 @@ export const TUTORIAL_STEPS = [
   },
   {
     id:                'ready',
-    title:             'You Are Ready',
-    body:              'Buy carefully, protect cash flow, keep up with maintenance, hire staff when needed, and use refinancing to scale.',
+    title:             'Time to Invest!',
+    body:              'Pick your first investment carefully and start managing and growing your empire!',
     target:            null,
     placement:         'center',
     fallbackPlacement: 'center',
