@@ -118,10 +118,10 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
             <span className="hdr-btn-icon">?</span>
           </button>
           <button
-            className="hdr-btn hdr-btn--disabled"
-            disabled
-            aria-label="Report (coming soon)"
-            title="Report — email delivery coming soon"
+            className="hdr-btn"
+            onClick={() => { dispatch(setModalOpen(true)); setReportOpen(true) }}
+            aria-label="Report"
+            title="Report"
           >
             <span className="hdr-btn-icon">📋</span>
             <span className="hdr-btn-text">Report</span>

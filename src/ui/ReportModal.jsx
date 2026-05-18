@@ -1,165 +1,116 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGame } from '../core/gameState.js'
-import { submitReportRequest } from '../core/gameEngine.js'
+import { createReportPayload } from '../systems/reportingSystem.js'
+import { formatShort, formatCashFlow } from '../utils/formatters.js'
 
-// The full detailed report will be delivered via email once the delivery
-// pipeline is connected. For now this modal collects the player's name,
-// email, optional cash-flow goal, and consent. The actual report payload
-// is built reducer-side via reportingSystem.createReportPayload and stashed
-// in state.reporting.reportRequests for later replay/inspection.
+// ⚠️  TEMPORARY INTERNAL TESTING MODE ⚠️
+// We do NOT collect the player's name/email yet and we do NOT email the
+// player. On open we build the structured report payload from current game
+// state and POST it to /api/sendReport, which (server-side) always emails
+// the formatted HTML report to the internal owner address only. The player
+// just sees the simple stats card below — same visual family as the
+// goal-achievement WinModal, intentionally minimal.
+//
+// LATER: collect player name + email + consent here and let the backend
+// send the player their own copy.
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+function formatMonths(m) {
+  if (m <= 0) return '0 months'
+  if (m < 12) return `${m} month${m !== 1 ? 's' : ''}`
+  const yrs = Math.floor(m / 12)
+  const mos = m % 12
+  if (mos === 0) return `${yrs} yr${yrs !== 1 ? 's' : ''}`
+  return `${yrs} yr ${mos} mo`
+}
+
+// Highest portfolio-value milestone reached, for the "major milestone" line.
+function topMilestone(reporting) {
+  const map = reporting?.milestones?.portfolioValueMilestones || {}
+  const reached = Object.keys(map)
+    .filter(k => map[k] != null)
+    .map(Number)
+    .sort((a, b) => b - a)
+  if (reached.length === 0) return null
+  return `${formatShort(reached[0])} portfolio`
+}
 
 export default function ReportModal({ onClose }) {
-  const { state, dispatch } = useGame()
+  const { state } = useGame()
+  const sentRef = useRef(false)
+  const [sendStatus, setSendStatus] = useState('sending') // 'sending' | 'sent' | 'error'
 
-  const initialGoal = state.reporting?.playerGoals?.desiredMonthlyCashFlow
-                      ?? state.cashFlowGoal
-                      ?? ''
+  const netCashFlow = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
+  const equity      = (state.portfolioValue || 0) - (state.totalDebt || 0)
+  const monthsPlayed = Math.max(0, (state.currentMonth || 1) - 1)
+  const milestone    = topMilestone(state.reporting)
 
-  const [name,              setName]              = useState('')
-  const [email,             setEmail]             = useState('')
-  const [desiredCF,         setDesiredCF]         = useState(String(initialGoal || ''))
-  const [consentEmail,      setConsentEmail]      = useState(true)
-  const [consentFollowUp,   setConsentFollowUp]   = useState(false)
-  const [errors,            setErrors]            = useState({})
-  const [submitted,         setSubmitted]         = useState(false)
+  // Fire the report send once, in the background. The player never sees
+  // backend details, the recipient address, or any logs.
+  useEffect(() => {
+    if (sentRef.current) return
+    sentRef.current = true
 
-  function validate() {
-    const next = {}
-    if (!name.trim())                          next.name = 'Please enter your name.'
-    if (!email.trim() || !EMAIL_RE.test(email)) next.email = 'Please enter a valid email.'
-    if (!consentEmail)                         next.consentEmail = 'You must agree to receive the report email.'
-    if (desiredCF && Number.isNaN(Number(desiredCF))) next.desiredCF = 'Enter a number.'
-    setErrors(next)
-    return Object.keys(next).length === 0
-  }
+    let cancelled = false
+    const payload = createReportPayload(state, {})
 
-  function handleSubmit(e) {
-    e?.preventDefault?.()
-    if (!validate()) return
-    const goalNum = desiredCF ? Number(desiredCF) : null
-    dispatch(submitReportRequest({
-      name:                    name.trim(),
-      email:                   email.trim(),
-      desiredMonthlyCashFlow:  goalNum,
-      consentToEmailReport:    consentEmail,
-      consentToFollowUp:       consentFollowUp,
-    }))
-    setSubmitted(true)
-  }
+    fetch('/api/sendReport', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ payload }),
+    })
+      .then(r => r.json().catch(() => ({ ok: false })))
+      .then(res => { if (!cancelled) setSendStatus(res?.ok ? 'sent' : 'error') })
+      .catch(() => { if (!cancelled) setSendStatus('error') })
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
 
+  const stats = [
+    { label: 'Monthly Cash Flow', value: formatCashFlow(netCashFlow) + '/mo', highlight: true },
+    { label: 'Portfolio Value',   value: formatShort(state.portfolioValue || 0) },
+    { label: 'Total Equity',      value: formatShort(equity) },
+    { label: 'Cash on Hand',      value: formatShort(state.cash || 0) },
+    { label: 'Properties Owned',  value: String(state.properties?.length || 0) },
+    { label: 'Months Played',     value: formatMonths(monthsPlayed) },
+  ]
+
   return (
     <div className="win-overlay report-overlay" onClick={handleOverlayClick}>
-      <div className="win-modal report-modal report-request-modal">
+      <div className="win-modal report-modal">
         <button className="modal-close-btn report-close-btn" onClick={onClose} aria-label="Close">×</button>
+        <div className="win-confetti-row">📊 🏗️ 💼 📈 🏠</div>
+        <h1 className="win-title report-title">Portfolio Snapshot</h1>
+        <p className="win-subtitle">
+          Month {monthsPlayed}{milestone ? ` · Top milestone: ${milestone}` : ''}
+        </p>
 
-        {!submitted ? (
-          <>
-            <h1 className="win-title report-title">Get Your Gameplay Report</h1>
-            <p className="report-request-body">
-              Enter your name and email and we'll prepare a detailed report showing
-              how you built your portfolio, grew cash flow, used debt, hit milestones,
-              and scaled your original cash.
-            </p>
-
-            <form className="report-request-form" onSubmit={handleSubmit} noValidate>
-              <div className="report-form-row">
-                <label htmlFor="rpt-name" className="report-form-label">Name *</label>
-                <input
-                  id="rpt-name"
-                  type="text"
-                  className="report-form-input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  autoComplete="name"
-                  placeholder="Your name"
-                />
-                {errors.name && <span className="report-form-error">{errors.name}</span>}
-              </div>
-
-              <div className="report-form-row">
-                <label htmlFor="rpt-email" className="report-form-label">Email *</label>
-                <input
-                  id="rpt-email"
-                  type="email"
-                  className="report-form-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                />
-                {errors.email && <span className="report-form-error">{errors.email}</span>}
-              </div>
-
-              <div className="report-form-row">
-                <label htmlFor="rpt-cf" className="report-form-label">
-                  Desired monthly cash flow goal <span className="report-form-hint">(optional)</span>
-                </label>
-                <input
-                  id="rpt-cf"
-                  type="number"
-                  inputMode="numeric"
-                  className="report-form-input"
-                  value={desiredCF}
-                  onChange={(e) => setDesiredCF(e.target.value)}
-                  placeholder="10000"
-                />
-                {errors.desiredCF && <span className="report-form-error">{errors.desiredCF}</span>}
-              </div>
-
-              <div className="report-form-row report-form-row--checkbox">
-                <label className="report-form-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={consentEmail}
-                    onChange={(e) => setConsentEmail(e.target.checked)}
-                  />
-                  <span>Send me my gameplay report by email *</span>
-                </label>
-                {errors.consentEmail && <span className="report-form-error">{errors.consentEmail}</span>}
-              </div>
-
-              <div className="report-form-row report-form-row--checkbox">
-                <label className="report-form-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={consentFollowUp}
-                    onChange={(e) => setConsentFollowUp(e.target.checked)}
-                  />
-                  <span>Send me occasional real estate investing resources</span>
-                </label>
-              </div>
-
-              <div className="win-actions report-request-actions">
-                <button type="button" className="win-btn-share" onClick={onClose}>Cancel</button>
-                <button type="submit" className="win-btn-continue">Send My Report</button>
-              </div>
-            </form>
-
-            <p className="report-form-disclaimer">
-              Email delivery is coming soon. We'll save your report data now and
-              send it as soon as the delivery system is connected.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="win-confetti-row">📬 ✅</div>
-            <h1 className="win-title report-title">Report Request Saved</h1>
-            <p className="report-request-body">
-              Thanks, <strong>{name}</strong>. We've saved your gameplay snapshot.
-              Email delivery will be connected next, and your full report will
-              be sent to <strong>{email}</strong>.
-            </p>
-            <div className="win-actions">
-              <button className="win-btn-continue" onClick={onClose}>Resume Game</button>
+        <div className="win-stats-grid">
+          {stats.map(s => (
+            <div key={s.label} className={`win-stat${s.highlight ? ' win-stat--hl' : ''}`}>
+              <span className="win-stat-label">{s.label}</span>
+              <span className="win-stat-value">{s.value}</span>
             </div>
-          </>
-        )}
+          ))}
+        </div>
+
+        <p className="report-send-status">
+          {sendStatus === 'sending' && '⏳ Preparing your detailed report…'}
+          {sendStatus === 'sent'    && '✅ Detailed report generated.'}
+          {sendStatus === 'error'   && 'ℹ️ Snapshot shown above. Detailed report will be available soon.'}
+        </p>
+
+        <div className="win-actions">
+          <button className="win-btn-continue" onClick={onClose}>Resume Game</button>
+        </div>
+
+        <p className="report-form-disclaimer">
+          Equity Empire is a game and educational tool — not investment advice.
+        </p>
       </div>
     </div>
   )

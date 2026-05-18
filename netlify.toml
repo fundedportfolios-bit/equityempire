@@ -1,0 +1,14 @@
+# Netlify build + functions configuration.
+# Build settings mirror package.json (vite build → dist).
+# The serverless function lives in netlify/functions and is exposed at
+# /api/sendReport via the function's own `config.path` export (Netlify
+# Functions v2), so no manual redirect rule is required here.
+
+[build]
+  command   = "npm run build"
+  publish   = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  # .mjs functions are ESM; Netlify Functions v2 runtime.
+  node_bundler = "esbuild"
