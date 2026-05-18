@@ -22,7 +22,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id:                'speed',
-    title:             'Speed and Month',
+    title:             'Game Speed Controls',
     body:              'Use the speed controls to decide how quickly months pass. Faster speed grows the game faster, but maintenance issues and decisions can pile up.',
     target:            'speed-controls',
     placement:         'below',
@@ -55,7 +55,7 @@ export const TUTORIAL_STEPS = [
   {
     id:                'invest',
     title:             'Invest',
-    body:              'Tap Invest to find properties you can buy. This is how you grow from small deals into larger assets.',
+    body:              'Tap Invest to find properties you can buy. This is how you grow from small deals into larger assets. Every click will show you new deals to review!',
     target:            'action-invest',
     placement:         'above',
     fallbackPlacement: 'center',
