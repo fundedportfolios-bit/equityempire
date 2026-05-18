@@ -1,25 +1,25 @@
 // ═══════════════════════════════════════════════════════════════
-// sendReport — Equity Empire gameplay report email (Netlify Function v2)
+// sendReport — Equity Empire detailed gameplay report email
+// Netlify Functions v2 · exposed at /api/sendReport (config.path below)
 //
-// ⚠️  TEMPORARY INTERNAL TESTING MODE ⚠️
-// This function ALWAYS sends the report to REPORT_OWNER_EMAIL only,
-// regardless of anything the frontend sends. The frontend does NOT
-// collect a player name/email yet and we are NOT emailing players.
-// This phase exists purely to iterate on the HTML report formatting.
+// PLAYER-FACING FLOW (replaces the earlier internal-testing mode that
+// always emailed the owner only):
+//   • The player submits { player:{name,email}, contactPreference, payload }
+//   • The detailed HTML+text report is emailed to the PLAYER.
+//   • from = REPORT_FROM_EMAIL, replyTo = REPORT_OWNER_EMAIL.
+//   • Only if contactPreference === 'requestSupport' do we ALSO send a
+//     lead-notification email to REPORT_OWNER_EMAIL.
 //
-// LATER: switch to collecting the player's name + email on the frontend,
-// validate consent, and send the report to the player (with this owner
-// copy optionally kept as a BCC/archive). When that happens, replace the
-// hard-coded `to: ownerEmail` below with the validated player address.
-//
-// Secrets come from Netlify environment variables — never hard-coded,
-// never shipped to the browser:
+// Secrets come from Netlify env only — never hard-coded, never shipped to
+// the browser:
 //   RESEND_API_KEY     — Resend API key (server only)
 //   REPORT_FROM_EMAIL  — "Equity Empire <equityempire_results@fundedportfolios.com>"
-//   REPORT_OWNER_EMAIL — fundedportfolios@gmail.com (the only recipient for now)
+//   REPORT_OWNER_EMAIL — fundedportfolios@gmail.com
 //   ALLOWED_ORIGIN     — https://equityempiregame.netlify.app
 //
-// Exposed at /api/sendReport via the config.path export below.
+// The frontend NEVER chooses the sender, CC, or BCC. The only recipients
+// the backend will ever email are: (a) the validated player address, and
+// (b) REPORT_OWNER_EMAIL — and (b) only when requestedSupport is true.
 // ═══════════════════════════════════════════════════════════════
 
 export const config = {
@@ -27,6 +27,7 @@ export const config = {
 }
 
 const MAX_BODY_BYTES = 256 * 1024 // 256 KB hard cap on the request body
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -46,28 +47,28 @@ function plain(n) {
   return isFinite(v) ? v.toLocaleString('en-US') : '—'
 }
 
+// Escape user-submitted + payload text before embedding in HTML.
 function esc(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
-// Build the detailed internal HTML email from the report payload. Defensive
-// against missing fields — older saves may not have every section.
-function buildHtml(payload) {
+// ─── HTML report (player-facing) ──────────────────────────────
+function buildPlayerHtml(payload, playerName) {
   const s   = payload?.summary || {}
   const m   = payload?.milestones || {}
   const pb  = payload?.propertyBreakdown || {}
-  const rec = payload?.currentRecords || {}
   const snaps = payload?.charts?.monthlySnapshots || []
   const hist  = payload?.history || []
 
   const pvMs = m.portfolioValueMilestones || {}
   const cfMs = m.monthlyCashFlowMilestones || {}
 
-  const reachedRow = (label, map) =>
+  const reachedRows = (label, map) =>
     Object.keys(map)
       .filter(k => map[k] != null)
       .sort((a, b) => Number(a) - Number(b))
@@ -79,8 +80,10 @@ function buildHtml(payload) {
     .map(name => `<tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">${esc(name)}</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(propCounts[name])}</td></tr>`)
     .join('') || `<tr><td colspan="2" style="padding:4px 10px;color:#888;">No properties owned</td></tr>`
 
-  // Compact growth history: first + every ~10th + last snapshot.
+  // Growth sampling: first + every ~10th + last snapshot.
   const sampled = snaps.filter((_, i) => i === 0 || i === snaps.length - 1 || i % 10 === 0)
+  const firstSnap = snaps[0]
+  const lastSnap  = snaps[snaps.length - 1]
   const growthRows = sampled
     .map(sn => `<tr>
       <td style="padding:4px 10px;border-bottom:1px solid #eee;">Mo ${plain(sn.month)}</td>
@@ -90,70 +93,88 @@ function buildHtml(payload) {
     </tr>`)
     .join('') || `<tr><td colspan="4" style="padding:4px 10px;color:#888;">No snapshots recorded</td></tr>`
 
-  // Recent notable events (last 25).
-  const recentHist = hist.slice(-25).reverse()
+  const recentHist = hist.slice(-20).reverse()
     .map(h => `<tr>
       <td style="padding:4px 10px;border-bottom:1px solid #eee;">Mo ${plain(h.month)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;">${esc(h.type)}</td>
       <td style="padding:4px 10px;border-bottom:1px solid #eee;">${esc(h.title)}</td>
       <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${h.amount != null ? num(h.amount) : ''}</td>
     </tr>`)
-    .join('') || `<tr><td colspan="4" style="padding:4px 10px;color:#888;">No major events recorded</td></tr>`
+    .join('') || `<tr><td colspan="3" style="padding:4px 10px;color:#888;">No major events recorded</td></tr>`
 
-  const goal      = payload?.playerInfo?.desiredMonthlyCashFlow ?? null
-  const goalLine  = goal != null
+  // Plain-English growth blurb.
+  let growthBlurb = ''
+  if (firstSnap && lastSnap && firstSnap !== lastSnap) {
+    growthBlurb = `Over ${plain(s.monthsPlayed)} months your portfolio went from
+      ${num(firstSnap.portfolioValue)} to ${num(lastSnap.portfolioValue)} and your
+      net monthly cash flow moved from ${num(firstSnap.netCashFlow)}/mo to
+      ${num(lastSnap.netCashFlow)}/mo.`
+  } else {
+    growthBlurb = `You finished with a portfolio value of ${num(s.finalPortfolioValue)}
+      and net monthly cash flow of ${num(s.finalNetCashFlow)}/mo.`
+  }
+
+  const goal = payload?.playerInfo?.desiredMonthlyCashFlow ?? null
+  const goalLine = goal != null
     ? `${num(goal)}/mo${m.desiredCashFlowAchievedMonth != null ? ` — achieved in month ${plain(m.desiredCashFlowAchievedMonth)}` : ' — not yet achieved'}`
     : 'Not set'
 
   const th = 'padding:6px 10px;text-align:left;background:#0f2a43;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.04em;'
   const sectionTitle = 'margin:28px 0 8px;font-size:16px;color:#0f2a43;border-bottom:2px solid #38bdf8;padding-bottom:4px;'
+  const rowL = 'padding:4px 10px;border-bottom:1px solid #eee;'
+  const rowR = 'padding:4px 10px;border-bottom:1px solid #eee;text-align:right;'
 
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f3f5f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a2330;">
   <div style="max-width:680px;margin:0 auto;padding:24px;">
     <div style="background:#0f2a43;color:#fff;padding:20px 24px;border-radius:10px 10px 0 0;">
-      <h1 style="margin:0;font-size:22px;">🏙️ Equity Empire — Gameplay Report</h1>
-      <p style="margin:6px 0 0;color:#9fc4e3;font-size:13px;">
-        Internal testing copy · Difficulty: ${esc(payload?.difficulty || '—')} · Generated ${esc(payload?.generatedAt || '')}
-      </p>
+      <h1 style="margin:0;font-size:22px;">🏙️ Your Equity Empire Report</h1>
+      <p style="margin:6px 0 0;color:#9fc4e3;font-size:13px;">Difficulty: ${esc(payload?.difficulty || '—')}</p>
     </div>
     <div style="background:#fff;padding:24px;border-radius:0 0 10px 10px;">
 
+      <p style="font-size:15px;line-height:1.6;">Hi ${esc(playerName)},</p>
+      <p style="font-size:14px;line-height:1.6;color:#46506180;color:#465061;">
+        Here's the detailed summary of how your real estate empire played out.
+      </p>
+
+      <h2 style="${sectionTitle}">Portfolio Growth</h2>
+      <p style="font-size:14px;line-height:1.6;color:#465061;">${growthBlurb}</p>
+
       <h2 style="${sectionTitle}">Session Summary</h2>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Starting cash</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.startingCash)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Cash on hand</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.finalCash)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Portfolio value</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.finalPortfolioValue)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Total equity</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.finalEquity)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Total debt</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.finalDebt)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Monthly income</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.finalMonthlyIncome)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Monthly expenses</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.finalMonthlyExpenses)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;"><strong>Net monthly cash flow</strong></td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;"><strong>${num(s.finalNetCashFlow)}/mo</strong></td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Cash flow goal</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${esc(goalLine)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Months played</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.monthsPlayed)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Properties owned</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.propertiesOwned)}</td></tr>
+        <tr><td style="${rowL}">Starting cash</td><td style="${rowR}">${num(s.startingCash)}</td></tr>
+        <tr><td style="${rowL}">Cash on hand</td><td style="${rowR}">${num(s.finalCash)}</td></tr>
+        <tr><td style="${rowL}">Portfolio value</td><td style="${rowR}">${num(s.finalPortfolioValue)}</td></tr>
+        <tr><td style="${rowL}">Total equity</td><td style="${rowR}">${num(s.finalEquity)}</td></tr>
+        <tr><td style="${rowL}">Total debt</td><td style="${rowR}">${num(s.finalDebt)}</td></tr>
+        <tr><td style="${rowL}">Monthly income</td><td style="${rowR}">${num(s.finalMonthlyIncome)}</td></tr>
+        <tr><td style="${rowL}">Monthly expenses</td><td style="${rowR}">${num(s.finalMonthlyExpenses)}</td></tr>
+        <tr><td style="${rowL}"><strong>Net monthly cash flow</strong></td><td style="${rowR}"><strong>${num(s.finalNetCashFlow)}/mo</strong></td></tr>
+        <tr><td style="${rowL}">Cash flow goal</td><td style="${rowR}">${esc(goalLine)}</td></tr>
+        <tr><td style="${rowL}">Months played</td><td style="${rowR}">${plain(s.monthsPlayed)}</td></tr>
+        <tr><td style="${rowL}">Properties owned</td><td style="${rowR}">${plain(s.propertiesOwned)}</td></tr>
       </table>
 
-      <h2 style="${sectionTitle}">Activity Totals</h2>
+      <h2 style="${sectionTitle}">What You Did</h2>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Properties purchased</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.propertiesPurchased)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Properties sold</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.propertiesSold)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Refinances completed</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.refinancesCompleted)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Total cash out from refinances</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.totalCashOutFromRefinances)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Upgrades completed</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.upgradesCompleted)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Staff hired</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.staffHired)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Maintenance issues resolved</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.maintenanceIssuesResolved)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Critical issues resolved</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(s.criticalIssuesResolved)}</td></tr>
-        <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Trivia bonus earned</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(s.triviaBonusEarned)}</td></tr>
+        <tr><td style="${rowL}">Properties purchased</td><td style="${rowR}">${plain(s.propertiesPurchased)}</td></tr>
+        <tr><td style="${rowL}">Properties sold</td><td style="${rowR}">${plain(s.propertiesSold)}</td></tr>
+        <tr><td style="${rowL}">Refinances completed</td><td style="${rowR}">${plain(s.refinancesCompleted)}</td></tr>
+        <tr><td style="${rowL}">Total cash out from refinances</td><td style="${rowR}">${num(s.totalCashOutFromRefinances)}</td></tr>
+        <tr><td style="${rowL}">Upgrades completed</td><td style="${rowR}">${plain(s.upgradesCompleted)}</td></tr>
+        <tr><td style="${rowL}">Staff hired</td><td style="${rowR}">${plain(s.staffHired)}</td></tr>
+        <tr><td style="${rowL}">Maintenance issues resolved</td><td style="${rowR}">${plain(s.maintenanceIssuesResolved)}</td></tr>
+        <tr><td style="${rowL}">Critical issues resolved</td><td style="${rowR}">${plain(s.criticalIssuesResolved)}</td></tr>
+        <tr><td style="${rowL}">Trivia bonus earned</td><td style="${rowR}">${num(s.triviaBonusEarned)}</td></tr>
       </table>
 
-      <h2 style="${sectionTitle}">Milestones</h2>
+      <h2 style="${sectionTitle}">Milestones Reached</h2>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        ${reachedRow('Portfolio', pvMs)}
-        ${reachedRow('Cash flow', cfMs)}
-        ${m.firstPropertyPurchaseMonth != null ? `<tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">First property purchase</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">Month ${plain(m.firstPropertyPurchaseMonth)}</td></tr>` : ''}
-        ${m.firstRefinanceMonth != null ? `<tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">First refinance</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">Month ${plain(m.firstRefinanceMonth)}</td></tr>` : ''}
-        ${m.firstStaffHireMonth != null ? `<tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">First staff hire</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">Month ${plain(m.firstStaffHireMonth)}</td></tr>` : ''}
+        ${reachedRows('Portfolio', pvMs)}
+        ${reachedRows('Cash flow', cfMs)}
+        ${m.firstPropertyPurchaseMonth != null ? `<tr><td style="${rowL}">First property purchase</td><td style="${rowR}">Month ${plain(m.firstPropertyPurchaseMonth)}</td></tr>` : ''}
+        ${m.firstRefinanceMonth != null ? `<tr><td style="${rowL}">First refinance</td><td style="${rowR}">Month ${plain(m.firstRefinanceMonth)}</td></tr>` : ''}
+        ${m.firstStaffHireMonth != null ? `<tr><td style="${rowL}">First staff hire</td><td style="${rowR}">Month ${plain(m.firstStaffHireMonth)}</td></tr>` : ''}
       </table>
 
       <h2 style="${sectionTitle}">Property Breakdown</h2>
@@ -168,36 +189,116 @@ function buildHtml(payload) {
         ${growthRows}
       </table>
 
-      <h2 style="${sectionTitle}">Recent Notable Events</h2>
+      <h2 style="${sectionTitle}">Recent Notable Moves</h2>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr><th style="${th}">Month</th><th style="${th}">Type</th><th style="${th}">Event</th><th style="${th}text-align:right;">Amount</th></tr>
+        <tr><th style="${th}">Month</th><th style="${th}">Event</th><th style="${th}text-align:right;">Amount</th></tr>
         ${recentHist}
       </table>
 
       <div style="margin-top:28px;padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c4a03;line-height:1.5;">
-        <strong>Disclaimer:</strong> Equity Empire is a game and educational tool only.
-        Nothing in this report is investment, financial, tax, or legal advice. Simulated
-        results do not represent real-world performance. Always consult a qualified
-        professional before making real investment decisions.
+        <strong>Disclaimer:</strong> Equity Empire is a game and educational tool.
+        This report is based on gameplay results and is not investment, tax, legal,
+        or lending advice.
       </div>
 
-      <p style="margin-top:18px;font-size:11px;color:#9aa5b1;">
-        Internal testing report · sent to project owner only · no player email collected in this phase.
+      <p style="margin-top:18px;font-size:12px;color:#9aa5b1;">
+        You received this because you requested a report from Equity Empire.
+        Your email is only used to send this report.
       </p>
     </div>
   </div>
 </body></html>`
 }
 
+// ─── Plain-text fallback ──────────────────────────────────────
+function buildPlayerText(payload, playerName) {
+  const s = payload?.summary || {}
+  const lines = [
+    `Hi ${playerName},`,
+    '',
+    `Here's your Equity Empire report (difficulty: ${payload?.difficulty || '—'}).`,
+    '',
+    'SESSION SUMMARY',
+    `  Starting cash:        ${num(s.startingCash)}`,
+    `  Cash on hand:         ${num(s.finalCash)}`,
+    `  Portfolio value:      ${num(s.finalPortfolioValue)}`,
+    `  Total equity:         ${num(s.finalEquity)}`,
+    `  Total debt:           ${num(s.finalDebt)}`,
+    `  Net monthly cashflow: ${num(s.finalNetCashFlow)}/mo`,
+    `  Months played:        ${plain(s.monthsPlayed)}`,
+    `  Properties owned:     ${plain(s.propertiesOwned)}`,
+    '',
+    'WHAT YOU DID',
+    `  Properties purchased: ${plain(s.propertiesPurchased)}`,
+    `  Properties sold:      ${plain(s.propertiesSold)}`,
+    `  Refinances:           ${plain(s.refinancesCompleted)}`,
+    `  Cash out from refis:  ${num(s.totalCashOutFromRefinances)}`,
+    `  Upgrades completed:   ${plain(s.upgradesCompleted)}`,
+    `  Staff hired:          ${plain(s.staffHired)}`,
+    `  Issues resolved:      ${plain(s.maintenanceIssuesResolved)}`,
+    `  Trivia bonus earned:  ${num(s.triviaBonusEarned)}`,
+    '',
+    'Disclaimer: Equity Empire is a game and educational tool. This report is',
+    'based on gameplay results and is not investment, tax, legal, or lending advice.',
+  ]
+  return lines.join('\n')
+}
+
+// ─── Owner lead-notification (only when requestSupport) ───────
+function buildOwnerHtml(payload, player) {
+  const s = payload?.summary || {}
+  const goal = payload?.playerInfo?.desiredMonthlyCashFlow ?? null
+  const rowL = 'padding:5px 10px;border-bottom:1px solid #eee;'
+  const rowR = 'padding:5px 10px;border-bottom:1px solid #eee;text-align:right;'
+  return `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1a2330;">
+  <div style="max-width:560px;margin:0 auto;padding:20px;">
+    <h2 style="color:#0f2a43;">Equity Empire — Support Request</h2>
+    <p>A player explicitly asked for follow-up about applying this to real-world investing.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <tr><td style="${rowL}">Name</td><td style="${rowR}">${esc(player.name)}</td></tr>
+      <tr><td style="${rowL}">Email</td><td style="${rowR}">${esc(player.email)}</td></tr>
+      <tr><td style="${rowL}">Contact preference</td><td style="${rowR}">requestSupport</td></tr>
+      <tr><td style="${rowL}">Cash flow goal</td><td style="${rowR}">${goal != null ? num(goal) + '/mo' : 'Not set'}</td></tr>
+      <tr><td style="${rowL}">Net monthly cash flow</td><td style="${rowR}">${num(s.finalNetCashFlow)}/mo</td></tr>
+      <tr><td style="${rowL}">Portfolio value</td><td style="${rowR}">${num(s.finalPortfolioValue)}</td></tr>
+      <tr><td style="${rowL}">Total equity</td><td style="${rowR}">${num(s.finalEquity)}</td></tr>
+      <tr><td style="${rowL}">Cash on hand</td><td style="${rowR}">${num(s.finalCash)}</td></tr>
+      <tr><td style="${rowL}">Properties owned</td><td style="${rowR}">${plain(s.propertiesOwned)}</td></tr>
+      <tr><td style="${rowL}">Months played</td><td style="${rowR}">${plain(s.monthsPlayed)}</td></tr>
+    </table>
+    <p style="margin-top:14px;font-size:13px;color:#465061;">
+      This player checked: "I'm building a portfolio and have real questions.
+      Somebody email me, please." Reply directly to ${esc(player.email)}.
+    </p>
+  </div>
+</body></html>`
+}
+
+async function sendViaResend(apiKey, message) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${apiKey}`,
+      'content-type':  'application/json',
+    },
+    body: JSON.stringify(message),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    return { ok: false, status: res.status, detail }
+  }
+  return { ok: true }
+}
+
 export default async (req) => {
-  const allowedOrigin  = process.env.ALLOWED_ORIGIN || ''
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || ''
   const corsHeaders = {
     'access-control-allow-origin':  allowedOrigin || '*',
     'access-control-allow-methods': 'POST, OPTIONS',
     'access-control-allow-headers': 'content-type',
   }
 
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('', { status: 204, headers: corsHeaders })
   }
@@ -207,7 +308,7 @@ export default async (req) => {
     return json({ ok: false, error: 'Method not allowed. Use POST.' }, 405, corsHeaders)
   }
 
-  // 2. Origin validation against ALLOWED_ORIGIN
+  // 2/3. Origin validation
   const origin  = req.headers.get('origin') || ''
   const referer = req.headers.get('referer') || ''
   if (allowedOrigin) {
@@ -218,7 +319,7 @@ export default async (req) => {
     }
   }
 
-  // 4. Body size limit (read raw text first)
+  // 11. Body size limit
   let raw
   try {
     raw = await req.text()
@@ -229,19 +330,37 @@ export default async (req) => {
     return json({ ok: false, error: 'Request body too large.' }, 413, corsHeaders)
   }
 
-  // 3. Validate report payload presence
   let body
   try {
     body = JSON.parse(raw)
   } catch {
     return json({ ok: false, error: 'Invalid JSON body.' }, 400, corsHeaders)
   }
+
+  // 7/8/9/10. Validate inputs — never trust the frontend blindly.
+  const player  = body?.player || {}
+  const name    = typeof player.name === 'string'  ? player.name.trim()  : ''
+  const email   = typeof player.email === 'string' ? player.email.trim() : ''
+  const pref    = body?.contactPreference
   const payload = body?.payload
+
+  if (!name) {
+    return json({ ok: false, error: 'Please enter your name.' }, 400, corsHeaders)
+  }
+  if (name.length > 120) {
+    return json({ ok: false, error: 'Name is too long.' }, 400, corsHeaders)
+  }
+  if (!email || !EMAIL_RE.test(email) || email.length > 200) {
+    return json({ ok: false, error: 'Please enter a valid email address.' }, 400, corsHeaders)
+  }
+  if (pref !== 'reportOnly' && pref !== 'requestSupport') {
+    return json({ ok: false, error: 'Invalid contact preference.' }, 400, corsHeaders)
+  }
   if (!payload || typeof payload !== 'object' || !payload.summary) {
     return json({ ok: false, error: 'Missing or invalid report payload.' }, 400, corsHeaders)
   }
 
-  // Required server config
+  // 4/5/6. Server config
   const apiKey     = process.env.RESEND_API_KEY
   const fromEmail  = process.env.REPORT_FROM_EMAIL
   const ownerEmail = process.env.REPORT_OWNER_EMAIL
@@ -249,39 +368,68 @@ export default async (req) => {
     return json({ ok: false, error: 'Server email configuration is incomplete.' }, 500, corsHeaders)
   }
 
-  // 5/6/7/8. Build HTML + send via Resend.
-  // TEMP: recipient is ALWAYS the owner email. Any address the frontend
-  // might send is intentionally ignored in this internal testing phase.
-  const html = buildHtml(payload)
-  const subject = `Equity Empire Report — ${payload?.difficulty || 'game'} · ${payload?.summary?.monthsPlayed ?? '?'} mo · ${num(payload?.summary?.finalPortfolioValue)} portfolio`
+  const requestedSupport = pref === 'requestSupport'
 
-  try {
-    const resendRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'authorization': `Bearer ${apiKey}`,
-        'content-type':  'application/json',
-      },
-      body: JSON.stringify({
-        from:     fromEmail,
-        to:       [ownerEmail],     // owner only — see TEMP note at top of file
-        reply_to: ownerEmail,
-        subject,
-        html,
-      }),
-    })
+  // ── Firestore lead storage (intentionally NOT wired up) ──────────────
+  // TODO: Persisting a `reportRequests` record from this serverless
+  // function would require firebase-admin + a service-account credential
+  // (e.g. a FIREBASE_SERVICE_ACCOUNT env var holding the JSON key) because
+  // the project only ships the Firebase *client* SDK to the browser. The
+  // client SDK can't authenticate a trusted server write here. To enable:
+  //   1. Create a service account in the Firebase console, download JSON.
+  //   2. Add it as a Netlify env var (single-line JSON), e.g.
+  //      FIREBASE_SERVICE_ACCOUNT.
+  //   3. `npm i firebase-admin`, init with cert(JSON.parse(env)), then
+  //      db.collection('reportRequests').add({ playerName, playerEmail,
+  //      contactPreference, requestedSupport, reportRequested:true,
+  //      createdAt: FieldValue.serverTimestamp(), firebaseUid,
+  //      finalMonthlyCashFlow, finalPortfolioValue, finalEquity,
+  //      cashOnHand, propertiesOwned, monthsPlayed, status:'new',
+  //      source:'equityEmpireReportButton' }).
+  // Per the requirements, we do NOT block the email flow on this — the
+  // report still sends. The frontend already passes payload.firebaseUid
+  // when available so it's ready to persist once the above is set up.
 
-    if (!resendRes.ok) {
-      const detail = await resendRes.text().catch(() => '')
-      console.error('[sendReport] Resend API error', resendRes.status, detail)
-      return json({ ok: false, error: `Email provider rejected the request (${resendRes.status}).` }, 502, corsHeaders)
-    }
+  // 12/13/14/15/16. Send the detailed report to the PLAYER.
+  const html = buildPlayerHtml(payload, name)
+  const text = buildPlayerText(payload, name)
+  const subject = `Your Equity Empire Report — ${payload?.summary?.monthsPlayed ?? '?'} months, ${num(payload?.summary?.finalPortfolioValue)} portfolio`
 
-    console.log('[sendReport] Report emailed to owner. months:', payload?.summary?.monthsPlayed,
-      'portfolio:', payload?.summary?.finalPortfolioValue)
-    return json({ ok: true }, 200, corsHeaders)
-  } catch (e) {
-    console.error('[sendReport] Unexpected error', e?.message || e)
-    return json({ ok: false, error: 'Unexpected server error sending report.' }, 500, corsHeaders)
+  const playerSend = await sendViaResend(apiKey, {
+    from:     fromEmail,
+    to:       [email],            // validated player address only
+    reply_to: ownerEmail,
+    subject,
+    html,
+    text,
+  })
+
+  if (!playerSend.ok) {
+    console.error('[sendReport] Player email failed', playerSend.status, playerSend.detail)
+    return json({ ok: false, error: `Email provider rejected the request (${playerSend.status || 'unknown'}).` }, 502, corsHeaders)
   }
+
+  // 17/18. Owner lead notification — ONLY when the player asked for support.
+  if (requestedSupport) {
+    const ownerSend = await sendViaResend(apiKey, {
+      from:     fromEmail,
+      to:       [ownerEmail],
+      reply_to: email,            // so the owner can reply straight to the player
+      subject:  'Equity Empire support request',
+      html:     buildOwnerHtml(payload, { name, email }),
+    })
+    if (!ownerSend.ok) {
+      // Don't fail the whole request — the player already got their report.
+      console.error('[sendReport] Owner lead email failed', ownerSend.status, ownerSend.detail)
+    } else {
+      console.log('[sendReport] Support lead notified for', email)
+    }
+  }
+
+  console.log('[sendReport] Report sent to player', email,
+    '| support:', requestedSupport,
+    '| months:', payload?.summary?.monthsPlayed,
+    '| portfolio:', payload?.summary?.finalPortfolioValue)
+
+  return json({ ok: true }, 200, corsHeaders)
 }

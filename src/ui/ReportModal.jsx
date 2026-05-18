@@ -1,125 +1,194 @@
-import { useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useGame } from '../core/gameState.js'
 import { createReportPayload } from '../systems/reportingSystem.js'
-import { formatShort, formatCashFlow } from '../utils/formatters.js'
-import { STAFF_ROLES, STAFF_ROLE_ORDER } from '../data/staffRules.js'
-import { getStaffCounts } from '../systems/staffSystem.js'
+import { auth } from '../firebase/config.js'
 
-// ⚠️  TEMPORARY INTERNAL TESTING MODE ⚠️
-// We do NOT collect the player's name/email yet and we do NOT email the
-// player. On open we build the structured report payload from current game
-// state and POST it to /api/sendReport, which (server-side) always emails
-// the formatted HTML report to the internal owner address only. The player
-// just sees the simple stats card below — same visual family as the
-// goal-achievement WinModal, intentionally minimal. The send happens
-// silently in the background — no status text is shown to the player.
+// Player-facing detailed-report request form. The player enters a name +
+// email and a contact preference (radio, default = report only). On submit
+// we build the structured payload from current game state and POST it to
+// /api/sendReport, which emails the detailed report to the player (and a
+// lead notification to the owner ONLY when requestSupport is chosen).
 //
-// LATER: collect player name + email + consent here and let the backend
-// send the player their own copy.
+// The player never sees raw payload JSON, backend logs, or the internal
+// owner address.
 
-function formatMonths(m) {
-  if (m <= 0) return '0 months'
-  if (m < 12) return `${m} month${m !== 1 ? 's' : ''}`
-  const yrs = Math.floor(m / 12)
-  const mos = m % 12
-  if (mos === 0) return `${yrs} yr${yrs !== 1 ? 's' : ''}`
-  return `${yrs} yr ${mos} mo`
-}
-
-// "3 Single LTR · 2 Micro Resort · 1 Apartment Complex"
-function buildPropertySummary(properties) {
-  if (!properties?.length) return 'No properties owned'
-  const counts = properties.reduce((acc, p) => {
-    const key = p.name || 'Property'
-    acc[key] = (acc[key] || 0) + 1
-    return acc
-  }, {})
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, n]) => `${n} ${name}`)
-    .join(' · ')
-}
-
-// "2 Full Time Staff · 1 Senior Manager"
-function buildStaffSummary(state) {
-  const counts = getStaffCounts(state)
-  const parts = STAFF_ROLE_ORDER
-    .filter(role => (counts[role] || 0) > 0)
-    .map(role => `${counts[role]} ${STAFF_ROLES[role].label}`)
-  return parts.length ? parts.join(' · ') : 'No staff hired'
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function ReportModal({ onClose }) {
   const { state } = useGame()
-  const sentRef = useRef(false)
 
-  const netCashFlow  = state.monthlyIncome - state.monthlyExpenses - (state.staffExpense || 0)
-  const equity       = (state.portfolioValue || 0) - (state.totalDebt || 0)
-  const monthsPlayed = Math.max(0, (state.currentMonth || 1) - 1)
-  const propSummary  = buildPropertySummary(state.properties)
-  const staffSummary = buildStaffSummary(state)
+  const [name,    setName]    = useState('')
+  const [email,   setEmail]   = useState('')
+  const [pref,    setPref]    = useState('reportOnly') // default per spec
+  const [errors,  setErrors]  = useState({})
+  const [status,  setStatus]  = useState('idle')       // idle | sending | sent | error
+  const [sendErr, setSendErr] = useState('')
 
-  // Fire the report send once, silently in the background. The player never
-  // sees backend details, the recipient address, send status, or any logs.
-  useEffect(() => {
-    if (sentRef.current) return
-    sentRef.current = true
+  function validate() {
+    const next = {}
+    if (!name.trim())                              next.name  = 'Please enter your name.'
+    if (!email.trim() || !EMAIL_RE.test(email))    next.email = 'Please enter a valid email.'
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  async function handleSubmit(e) {
+    e?.preventDefault?.()
+    if (status === 'sending') return
+    if (!validate()) return
+
+    setStatus('sending')
+    setSendErr('')
+
     const payload = createReportPayload(state, {})
-    fetch('/api/sendReport', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ payload }),
-    }).catch(() => { /* silent — never surfaced to the player */ })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // Ready for future Firestore lead storage (backend persists when set up).
+    payload.firebaseUid = auth?.currentUser?.uid || null
+
+    try {
+      const res = await fetch('/api/sendReport', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          player:            { name: name.trim(), email: email.trim() },
+          contactPreference: pref,
+          payload,
+        }),
+      })
+      const data = await res.json().catch(() => ({ ok: false }))
+      if (data?.ok) {
+        setStatus('sent')
+      } else {
+        setStatus('error')
+        setSendErr(data?.error || 'Something went wrong. Please try again.')
+      }
+    } catch {
+      setStatus('error')
+      setSendErr('Could not reach the report service. Please try again.')
+    }
+  }
 
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
   }
 
-  const stats = [
-    { label: 'Monthly Cash Flow', value: formatCashFlow(netCashFlow) + '/mo', highlight: true },
-    { label: 'Portfolio Value',   value: formatShort(state.portfolioValue || 0) },
-    { label: 'Total Equity',      value: formatShort(equity) },
-    { label: 'Cash on Hand',      value: formatShort(state.cash || 0) },
-    { label: 'Properties Owned',  value: String(state.properties?.length || 0) },
-    { label: 'Months Played',     value: formatMonths(monthsPlayed) },
-  ]
-
   return (
     <div className="win-overlay report-overlay" onClick={handleOverlayClick}>
-      <div className="win-modal report-modal">
+      <div className="win-modal report-modal report-request-modal">
         <button className="modal-close-btn report-close-btn" onClick={onClose} aria-label="Close">×</button>
-        <div className="win-confetti-row">📊 🏗️ 💼 📈 🏠</div>
-        <h1 className="win-title report-title">Portfolio Snapshot</h1>
 
-        <div className="report-portfolio-summary">
-          <div className="report-summary-line">
-            <span className="report-summary-label">Properties</span>
-            <span className="report-summary-value">{propSummary}</span>
-          </div>
-          <div className="report-summary-line">
-            <span className="report-summary-label">Staff</span>
-            <span className="report-summary-value">{staffSummary}</span>
-          </div>
-        </div>
-
-        <div className="win-stats-grid">
-          {stats.map(s => (
-            <div key={s.label} className={`win-stat${s.highlight ? ' win-stat--hl' : ''}`}>
-              <span className="win-stat-label">{s.label}</span>
-              <span className="win-stat-value">{s.value}</span>
+        {status === 'sent' ? (
+          <>
+            <div className="win-confetti-row">📬 ✅</div>
+            <h1 className="win-title report-title">Report On The Way</h1>
+            <p className="report-request-body">
+              {pref === 'requestSupport'
+                ? 'Your detailed report is on the way. Since you asked for help applying this to real world investing, someone from Funded Portfolios may follow up.'
+                : 'Your detailed report is on the way. Check your inbox in a few minutes.'}
+            </p>
+            <div className="win-actions">
+              <button className="win-btn-continue" onClick={onClose}>Resume Game</button>
             </div>
-          ))}
-        </div>
+          </>
+        ) : (
+          <>
+            <h1 className="win-title report-title">Request Detailed Report</h1>
+            <p className="report-request-body">
+              This feature sends you a detailed summary of your game results,
+              including portfolio growth, cash flow, milestones, property moves,
+              refinances, upgrades, and staffing choices.
+            </p>
+            <p className="report-request-notice">
+              Your email will only be used to send this report unless you
+              explicitly ask for follow up below. No spam. No surprise sales emails.
+            </p>
 
-        <div className="win-actions">
-          <button className="win-btn-continue" onClick={onClose}>Resume Game</button>
-        </div>
+            <form className="report-request-form" onSubmit={handleSubmit} noValidate>
+              <div className="report-form-row">
+                <label htmlFor="rpt-name" className="report-form-label">Name *</label>
+                <input
+                  id="rpt-name"
+                  type="text"
+                  className="report-form-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  placeholder="Your name"
+                  disabled={status === 'sending'}
+                />
+                {errors.name && <span className="report-form-error">{errors.name}</span>}
+              </div>
 
-        <p className="report-form-disclaimer">
-          Equity Empire is a game and educational tool — not investment advice.
-        </p>
+              <div className="report-form-row">
+                <label htmlFor="rpt-email" className="report-form-label">Email *</label>
+                <input
+                  id="rpt-email"
+                  type="email"
+                  className="report-form-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  disabled={status === 'sending'}
+                />
+                {errors.email && <span className="report-form-error">{errors.email}</span>}
+              </div>
+
+              <div className="report-form-row">
+                <span className="report-form-label">Contact preference</span>
+                <label className="report-form-radio">
+                  <input
+                    type="radio"
+                    name="contactPreference"
+                    value="reportOnly"
+                    checked={pref === 'reportOnly'}
+                    onChange={() => setPref('reportOnly')}
+                    disabled={status === 'sending'}
+                  />
+                  <span>I don't need investing help. But I'll take a free report!</span>
+                </label>
+                <label className="report-form-radio">
+                  <input
+                    type="radio"
+                    name="contactPreference"
+                    value="requestSupport"
+                    checked={pref === 'requestSupport'}
+                    onChange={() => setPref('requestSupport')}
+                    disabled={status === 'sending'}
+                  />
+                  <span>I'm building a portfolio and have real questions. Somebody email me, please.</span>
+                </label>
+              </div>
+
+              {status === 'error' && (
+                <p className="report-form-error report-form-error--block">{sendErr}</p>
+              )}
+
+              <div className="win-actions report-request-actions">
+                <button
+                  type="button"
+                  className="win-btn-share"
+                  onClick={onClose}
+                  disabled={status === 'sending'}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="win-btn-continue"
+                  disabled={status === 'sending'}
+                >
+                  {status === 'sending' ? 'Sending…' : 'Send My Report'}
+                </button>
+              </div>
+            </form>
+
+            <p className="report-form-disclaimer">
+              <strong>Important disclaimer:</strong> Equity Empire is a game and
+              educational tool. Your report is based on gameplay results and is
+              not investment, tax, legal, or lending advice.
+            </p>
+          </>
+        )}
       </div>
     </div>
   )

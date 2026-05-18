@@ -3090,35 +3090,31 @@ body {
   margin: 14px 0 0;
   font-style: italic;
 }
-.report-portfolio-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 4px 0 16px;
-  padding: 12px 14px;
+.report-request-notice {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 16px;
+  padding: 10px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   text-align: left;
 }
-.report-summary-line {
+.report-form-radio {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   font-size: 0.85rem;
-  line-height: 1.4;
-}
-.report-summary-label {
-  flex-shrink: 0;
-  width: 70px;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  padding-top: 2px;
-}
-.report-summary-value {
   color: var(--text);
-  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.4;
+  padding: 4px 0;
+}
+.report-form-radio input { margin-top: 3px; flex-shrink: 0; }
+.report-form-error--block {
+  text-align: center;
+  margin: 4px 0 0;
 }
 .report-close-btn {
   position: absolute;
