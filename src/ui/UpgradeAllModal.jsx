@@ -53,7 +53,10 @@ function UpgradeRow({ upgrade, playerCash, onInstall }) {
 export default function UpgradeAllModal({ onClose }) {
   const { state, dispatch } = useGame()
 
-  const allUpgrades = useMemo(() => {
+  // Build the row list, then split into "affordable now" and "saving for"
+  // groups so the player immediately sees what they can act on, with the
+  // still-out-of-reach ones below (scrollable in the modal body).
+  const { allUpgrades, affordableUpgrades, lockedUpgrades } = useMemo(() => {
     const rows = []
     for (const property of state.properties) {
       const units = property.units || 1
@@ -65,8 +68,12 @@ export default function UpgradeAllModal({ onClose }) {
         rows.push({ template, property, rolledCost, permanentRentBoost, permanentValueBoost, roi })
       }
     }
-    return rows.sort((a, b) => b.roi - a.roi || a.rolledCost - b.rolledCost)
-  }, [state.properties.map(p => p.id + (p.completedUpgrades?.length ?? 0)).join()])
+    const byRoi = (a, b) => b.roi - a.roi || a.rolledCost - b.rolledCost
+    const affordable = rows.filter(r => state.cash >= r.rolledCost).sort(byRoi)
+    const locked     = rows.filter(r => state.cash <  r.rolledCost).sort(byRoi)
+    return { allUpgrades: [...affordable, ...locked], affordableUpgrades: affordable, lockedUpgrades: locked }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.cash, state.properties.map(p => p.id + (p.completedUpgrades?.length ?? 0)).join()])
 
   function handleInstall({ template, property, rolledCost, permanentRentBoost, permanentValueBoost }) {
     dispatch(installUpgrade(property.id, makeInstance(template, rolledCost, permanentRentBoost, permanentValueBoost)))
@@ -105,7 +112,9 @@ export default function UpgradeAllModal({ onClose }) {
             <h2 className="modal-title">Portfolio Upgrades</h2>
             <p className="modal-subtitle">
               Cash: <strong>{formatShort(state.cash)}</strong>
-              {allUpgrades.length > 0 && <span> · {allUpgrades.length} available · sorted by ROI</span>}
+              {allUpgrades.length > 0 && (
+                <span> · {affordableUpgrades.length} affordable / {lockedUpgrades.length} saving · sorted by ROI</span>
+              )}
             </p>
           </div>
           <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
@@ -133,16 +142,36 @@ export default function UpgradeAllModal({ onClose }) {
                     BUY ALL · {formatCurrency(totalCost)}
                   </button>
                 </div>
-                <ul className="upgrades-list">
-                  {allUpgrades.map(u => (
-                    <UpgradeRow
-                      key={`${u.property.id}-${u.template.upgradeId}`}
-                      upgrade={u}
-                      playerCash={state.cash}
-                      onInstall={handleInstall}
-                    />
-                  ))}
-                </ul>
+                {affordableUpgrades.length > 0 && (
+                  <ul className="upgrades-list">
+                    {affordableUpgrades.map(u => (
+                      <UpgradeRow
+                        key={`${u.property.id}-${u.template.upgradeId}`}
+                        upgrade={u}
+                        playerCash={state.cash}
+                        onInstall={handleInstall}
+                      />
+                    ))}
+                  </ul>
+                )}
+                {lockedUpgrades.length > 0 && (
+                  <>
+                    <div className="upgrades-divider">
+                      <span className="upgrades-divider-label">Saving For</span>
+                      <span className="upgrades-divider-count">{lockedUpgrades.length} more — scroll to view</span>
+                    </div>
+                    <ul className="upgrades-list">
+                      {lockedUpgrades.map(u => (
+                        <UpgradeRow
+                          key={`${u.property.id}-${u.template.upgradeId}`}
+                          upgrade={u}
+                          playerCash={state.cash}
+                          onInstall={handleInstall}
+                        />
+                      ))}
+                    </ul>
+                  </>
+                )}
               </>
             )
           }

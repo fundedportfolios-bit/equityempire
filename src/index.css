@@ -1542,6 +1542,29 @@ body {
   font-weight: 700;
 }
 
+/* ─── Affordable / Saving-For divider in UpgradeAllModal ─────── */
+.upgrades-divider {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 4px 4px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.upgrades-divider-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.upgrades-divider-count {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 /* ─── Upgrade list (UpgradeModal / UpgradeAllModal) ──────────────── */
 .upgrades-list {
   list-style: none;

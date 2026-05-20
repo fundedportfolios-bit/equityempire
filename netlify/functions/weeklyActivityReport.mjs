@@ -149,28 +149,36 @@ function aggregate(events) {
 function buildHtml(stats, range) {
   const th = 'padding:6px 10px;text-align:left;background:#0f2a43;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.04em;'
   const sectionTitle = 'margin:24px 0 8px;font-size:16px;color:#0f2a43;border-bottom:2px solid #38bdf8;padding-bottom:4px;'
+  // Cell styles. Long-content cells get word-break so emails / long uids
+  // don't blow out the table on narrow viewports.
+  const td      = 'padding:4px 10px;border-bottom:1px solid #eee;word-break:break-word;overflow-wrap:anywhere;'
+  const tdRight = td + 'text-align:right;white-space:nowrap;'
 
+  // Top Players table — explicit column widths so columns distribute
+  // predictably under table-layout:fixed; outer div is overflow-x:auto so
+  // clients that don't honor table-layout still let the user scroll the
+  // table horizontally instead of blowing past the email container.
   const actorRows = stats.topActors.map(a => `
     <tr>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;">${esc(a.isUid ? `uid:${a.id.slice(0, 10)}…` : `guest:${a.id.slice(0, 10)}…`)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(a.sessionCount)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${a.highestCashFlow != null ? num(a.highestCashFlow) + '/mo' : '—'}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${a.highestPortfolio != null ? num(a.highestPortfolio) : '—'}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${a.highestEquity != null ? num(a.highestEquity) : '—'}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(a.propertiesOwned)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(a.reportRequests)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${a.supportRequested ? '✅' : '—'}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${a.lastActiveAt ? fmtDate(a.lastActiveAt) : '—'}</td>
+      <td style="${td}">${esc(a.isUid ? `uid:${a.id.slice(0, 10)}…` : `guest:${a.id.slice(0, 10)}…`)}</td>
+      <td style="${tdRight}">${plain(a.sessionCount)}</td>
+      <td style="${tdRight}">${a.highestCashFlow != null ? num(a.highestCashFlow) + '/mo' : '—'}</td>
+      <td style="${tdRight}">${a.highestPortfolio != null ? num(a.highestPortfolio) : '—'}</td>
+      <td style="${tdRight}">${a.highestEquity != null ? num(a.highestEquity) : '—'}</td>
+      <td style="${tdRight}">${plain(a.propertiesOwned)}</td>
+      <td style="${tdRight}">${plain(a.reportRequests)}</td>
+      <td style="${tdRight}">${a.supportRequested ? '✅' : '—'}</td>
+      <td style="${tdRight}">${a.lastActiveAt ? fmtDate(a.lastActiveAt) : '—'}</td>
     </tr>`).join('') || `<tr><td colspan="9" style="padding:8px 10px;color:#888;">No activity in the last 7 days.</td></tr>`
 
   const supportRows = stats.supportEvents.map(e => `
     <tr>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;">${esc(e.playerName || '—')}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;">${esc(e.playerEmail || '—')}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(e.monthlyCashFlow)}/mo</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${num(e.portfolioValue)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(e.propertiesOwned)}</td>
-      <td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(e.monthsPlayed)}</td>
+      <td style="${td}">${esc(e.playerName || '—')}</td>
+      <td style="${td}">${esc(e.playerEmail || '—')}</td>
+      <td style="${tdRight}">${num(e.monthlyCashFlow)}/mo</td>
+      <td style="${tdRight}">${num(e.portfolioValue)}</td>
+      <td style="${tdRight}">${plain(e.propertiesOwned)}</td>
+      <td style="${tdRight}">${plain(e.monthsPlayed)}</td>
     </tr>`).join('') || `<tr><td colspan="6" style="padding:8px 10px;color:#888;">No support requests this week.</td></tr>`
 
   return `<!DOCTYPE html>
@@ -198,34 +206,57 @@ function buildHtml(stats, range) {
       </table>
 
       <h2 style="${sectionTitle}">Top Players & Guests</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <tr>
-          <th style="${th}">Actor</th>
-          <th style="${th}text-align:right;">Sessions</th>
-          <th style="${th}text-align:right;">Top CF</th>
-          <th style="${th}text-align:right;">Top Portfolio</th>
-          <th style="${th}text-align:right;">Top Equity</th>
-          <th style="${th}text-align:right;">Props</th>
-          <th style="${th}text-align:right;">Reports</th>
-          <th style="${th}text-align:right;">Support</th>
-          <th style="${th}text-align:right;">Last Active</th>
-        </tr>
-        ${actorRows}
-      </table>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;">
+        <table style="width:100%;min-width:680px;table-layout:fixed;border-collapse:collapse;font-size:12px;">
+          <colgroup>
+            <col style="width:22%;" />
+            <col style="width:9%;" />
+            <col style="width:12%;" />
+            <col style="width:13%;" />
+            <col style="width:12%;" />
+            <col style="width:7%;" />
+            <col style="width:8%;" />
+            <col style="width:7%;" />
+            <col style="width:10%;" />
+          </colgroup>
+          <tr>
+            <th style="${th}">Actor</th>
+            <th style="${th}text-align:right;">Sessions</th>
+            <th style="${th}text-align:right;">Top CF</th>
+            <th style="${th}text-align:right;">Top Portfolio</th>
+            <th style="${th}text-align:right;">Top Equity</th>
+            <th style="${th}text-align:right;">Props</th>
+            <th style="${th}text-align:right;">Reports</th>
+            <th style="${th}text-align:right;">Support</th>
+            <th style="${th}text-align:right;">Last Active</th>
+          </tr>
+          ${actorRows}
+        </table>
+      </div>
 
       <h2 style="${sectionTitle}">Support Requests</h2>
       <p style="font-size:13px;color:#465061;">Players who explicitly requested follow-up via the in-game form.</p>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr>
-          <th style="${th}">Name</th>
-          <th style="${th}">Email</th>
-          <th style="${th}text-align:right;">Net CF</th>
-          <th style="${th}text-align:right;">Portfolio</th>
-          <th style="${th}text-align:right;">Props</th>
-          <th style="${th}text-align:right;">Months</th>
-        </tr>
-        ${supportRows}
-      </table>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;">
+        <table style="width:100%;min-width:560px;table-layout:fixed;border-collapse:collapse;font-size:13px;">
+          <colgroup>
+            <col style="width:18%;" />
+            <col style="width:32%;" />
+            <col style="width:14%;" />
+            <col style="width:14%;" />
+            <col style="width:10%;" />
+            <col style="width:12%;" />
+          </colgroup>
+          <tr>
+            <th style="${th}">Name</th>
+            <th style="${th}">Email</th>
+            <th style="${th}text-align:right;">Net CF</th>
+            <th style="${th}text-align:right;">Portfolio</th>
+            <th style="${th}text-align:right;">Props</th>
+            <th style="${th}text-align:right;">Months</th>
+          </tr>
+          ${supportRows}
+        </table>
+      </div>
 
       <p style="margin-top:24px;font-size:12px;color:#7c8895;line-height:1.55;">
         Guest identities are anonymous unless the player explicitly requested
