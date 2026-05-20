@@ -1782,18 +1782,13 @@ body {
 .staff-roster-actions {
   margin-left: auto;
   display: flex;
+  flex-direction: column;   /* Hire on top, Fire below, at every breakpoint */
   gap: 4px;
   flex-shrink: 0;
 }
-@media (max-width: 480px) {
-  .staff-roster-actions {
-    flex-direction: column;
-    gap: 4px;
-  }
-  .staff-roster-actions .staff-roster-hire-btn,
-  .staff-roster-actions .staff-roster-fire-btn {
-    min-width: 56px;
-  }
+.staff-roster-actions .staff-roster-hire-btn,
+.staff-roster-actions .staff-roster-fire-btn {
+  min-width: 56px;
 }
 .staff-roster-hire-btn,
 .staff-roster-fire-btn {
