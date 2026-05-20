@@ -169,8 +169,17 @@ export default async (req) => {
 
   if (!fbAdmin.hasAdmin) {
     // No Firestore — accept and no-op so the frontend never crashes mid-game.
-    console.warn(`[logGameActivity] Admin disabled; dropping event ${eventType}`)
-    return json({ ok: true, stored: false, reason: 'admin-disabled' }, 200, corsHeaders)
+    // The `reason` and (when available) `code` come from getFirebaseAdmin and
+    // are categorical, not value-leaking — safe to return.
+    console.warn(`[logGameActivity] Admin disabled (${fbAdmin.reason || 'unknown'}); dropping event ${eventType}`)
+    return json({
+      ok:      true,
+      stored:  false,
+      reason:  fbAdmin.reason || 'admin-disabled',
+      missing: fbAdmin.missing || null,
+      code:    fbAdmin.code    || null,
+      message: fbAdmin.message || null,
+    }, 200, corsHeaders)
   }
 
   // Build document. Field is omitted (vs null) when not supplied — keeps the
