@@ -136,8 +136,8 @@ function aggregate(events) {
       highestEquity:    a.highestEquity    === -Infinity ? null : a.highestEquity,
     }))
     .sort((a, b) =>
-      (b.sessionCount - a.sessionCount) ||
-      ((b.highestPortfolio ?? 0) - (a.highestPortfolio ?? 0))
+      ((b.highestPortfolio ?? 0) - (a.highestPortfolio ?? 0)) ||
+      (b.sessionCount - a.sessionCount)
     )
     .slice(0, 25)
 
@@ -160,44 +160,57 @@ function aggregate(events) {
 
 // ─── Email composition ─────────────────────────────────────────
 function buildHtml(stats, range) {
-  // Tight padding + small font-size so the 9-column "Top Players" table can
-  // collapse to fit narrow Gmail/Outlook panes (Gmail strips overflow:auto
-  // on divs, so we can't rely on a horizontal-scroll wrapper — the table
-  // itself has to fit the container at every width).
-  const th = 'padding:6px 6px;text-align:left;background:#0f2a43;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.03em;'
+  // Top Players & Support Requests render as stacked cards (one <table> per
+  // entry) rather than wide multi-column tables, because the wide-table
+  // approach overflows narrow Gmail/Outlook panes regardless of how tight
+  // the column widths are. Cards reflow naturally at any viewport width.
   const sectionTitle = 'margin:24px 0 8px;font-size:16px;color:#0f2a43;border-bottom:2px solid #38bdf8;padding-bottom:4px;'
-  // Long-content cells word-break so emails/long uids wrap instead of
-  // forcing the table wider. Numeric cells use nowrap so $ amounts and
-  // dates stay on one line.
-  const td      = 'padding:4px 6px;border-bottom:1px solid #eee;word-break:break-word;overflow-wrap:anywhere;font-size:11px;'
-  const tdRight = td + 'text-align:right;white-space:nowrap;'
 
-  // Top Players table — explicit column widths so columns distribute
-  // predictably under table-layout:fixed; outer div is overflow-x:auto so
-  // clients that don't honor table-layout still let the user scroll the
-  // table horizontally instead of blowing past the email container.
-  const actorRows = stats.topActors.map(a => `
-    <tr>
-      <td style="${td}">${esc(a.isUid ? `uid:${a.id.slice(0, 10)}…` : `guest:${a.id.slice(0, 10)}…`)}</td>
-      <td style="${tdRight}">${plain(a.sessionCount)}</td>
-      <td style="${tdRight}">${a.highestCashFlow != null ? numShort(a.highestCashFlow) + '/mo' : '—'}</td>
-      <td style="${tdRight}">${a.highestPortfolio != null ? numShort(a.highestPortfolio) : '—'}</td>
-      <td style="${tdRight}">${a.highestEquity != null ? numShort(a.highestEquity) : '—'}</td>
-      <td style="${tdRight}">${plain(a.propertiesOwned)}</td>
-      <td style="${tdRight}">${plain(a.reportRequests)}</td>
-      <td style="${tdRight}">${a.supportRequested ? '✅' : '—'}</td>
-      <td style="${tdRight}">${a.lastActiveAt ? fmtDate(a.lastActiveAt) : '—'}</td>
-    </tr>`).join('') || `<tr><td colspan="9" style="padding:8px 10px;color:#888;">No activity in the last 7 days.</td></tr>`
+  // Card layout (instead of wide tables) — every email client renders
+  // <table>-based cards reliably, and the inline "·"-separated stat list
+  // wraps naturally at any viewport width with no horizontal overflow.
+  const sep = '<span style="color:#94a3b8;"> · </span>'
 
-  const supportRows = stats.supportEvents.map(e => `
-    <tr>
-      <td style="${td}">${esc(e.playerName || '—')}</td>
-      <td style="${td}">${esc(e.playerEmail || '—')}</td>
-      <td style="${tdRight}">${numShort(e.monthlyCashFlow)}/mo</td>
-      <td style="${tdRight}">${numShort(e.portfolioValue)}</td>
-      <td style="${tdRight}">${plain(e.propertiesOwned)}</td>
-      <td style="${tdRight}">${plain(e.monthsPlayed)}</td>
-    </tr>`).join('') || `<tr><td colspan="6" style="padding:8px 10px;color:#888;">No support requests this week.</td></tr>`
+  const actorCards = stats.topActors.map(a => `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+      style="width:100%;border-collapse:collapse;margin-bottom:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+      <tr><td style="padding:10px 12px;">
+        <div style="font-weight:700;color:#0f2a43;font-size:14px;word-break:break-all;">
+          ${esc(a.isUid ? `uid:${a.id.slice(0, 16)}…` : `guest:${a.id.slice(0, 16)}…`)}
+        </div>
+        <div style="font-size:13px;color:#465061;margin-top:6px;line-height:1.55;">
+          <strong>Portfolio:</strong> ${a.highestPortfolio != null ? numShort(a.highestPortfolio) : '—'}${sep}
+          <strong>Equity:</strong> ${a.highestEquity != null ? numShort(a.highestEquity) : '—'}${sep}
+          <strong>Top CF:</strong> ${a.highestCashFlow != null ? numShort(a.highestCashFlow) + '/mo' : '—'}
+        </div>
+        <div style="font-size:13px;color:#465061;margin-top:4px;line-height:1.55;">
+          <strong>Properties:</strong> ${plain(a.propertiesOwned)}${sep}
+          <strong>Sessions:</strong> ${plain(a.sessionCount)}${sep}
+          <strong>Reports:</strong> ${plain(a.reportRequests)}${sep}
+          <strong>Support:</strong> ${a.supportRequested ? '✅' : '—'}
+        </div>
+        <div style="font-size:11px;color:#7c8895;margin-top:6px;">
+          Last active ${a.lastActiveAt ? fmtDate(a.lastActiveAt) : '—'}
+        </div>
+      </td></tr>
+    </table>`).join('') || `<p style="color:#888;font-size:13px;">No activity in the last 7 days.</p>`
+
+  const supportCards = stats.supportEvents.map(e => `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+      style="width:100%;border-collapse:collapse;margin-bottom:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;">
+      <tr><td style="padding:10px 12px;">
+        <div style="font-weight:700;color:#0f2a43;font-size:14px;">${esc(e.playerName || '—')}</div>
+        <div style="font-size:13px;color:#465061;margin-top:2px;word-break:break-all;overflow-wrap:anywhere;">
+          ${esc(e.playerEmail || '—')}
+        </div>
+        <div style="font-size:13px;color:#465061;margin-top:6px;line-height:1.55;">
+          <strong>Portfolio:</strong> ${numShort(e.portfolioValue)}${sep}
+          <strong>Net CF:</strong> ${numShort(e.monthlyCashFlow)}/mo${sep}
+          <strong>Properties:</strong> ${plain(e.propertiesOwned)}${sep}
+          <strong>Months:</strong> ${plain(e.monthsPlayed)}
+        </div>
+      </td></tr>
+    </table>`).join('') || `<p style="color:#888;font-size:13px;">No support requests this week.</p>`
 
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f3f5f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a2330;">
@@ -223,54 +236,13 @@ function buildHtml(stats, range) {
         <tr><td style="padding:4px 10px;border-bottom:1px solid #eee;">Staff hires</td><td style="padding:4px 10px;border-bottom:1px solid #eee;text-align:right;">${plain(stats.staffEvents)}</td></tr>
       </table>
 
-      <h2 style="${sectionTitle}">Top Players & Guests</h2>
-      <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
-        <colgroup>
-          <col style="width:22%;" />
-          <col style="width:8%;" />
-          <col style="width:13%;" />
-          <col style="width:13%;" />
-          <col style="width:13%;" />
-          <col style="width:8%;" />
-          <col style="width:8%;" />
-          <col style="width:7%;" />
-          <col style="width:8%;" />
-        </colgroup>
-        <tr>
-          <th style="${th}">Actor</th>
-          <th style="${th}text-align:right;">Sess.</th>
-          <th style="${th}text-align:right;">CF</th>
-          <th style="${th}text-align:right;">Portfolio</th>
-          <th style="${th}text-align:right;">Equity</th>
-          <th style="${th}text-align:right;">Props</th>
-          <th style="${th}text-align:right;">Rpts</th>
-          <th style="${th}text-align:right;">Sup.</th>
-          <th style="${th}text-align:right;">Active</th>
-        </tr>
-        ${actorRows}
-      </table>
-
       <h2 style="${sectionTitle}">Support Requests</h2>
       <p style="font-size:13px;color:#465061;">Players who explicitly requested follow-up via the in-game form.</p>
-      <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
-        <colgroup>
-          <col style="width:18%;" />
-          <col style="width:34%;" />
-          <col style="width:14%;" />
-          <col style="width:14%;" />
-          <col style="width:8%;" />
-          <col style="width:12%;" />
-        </colgroup>
-        <tr>
-          <th style="${th}">Name</th>
-          <th style="${th}">Email</th>
-          <th style="${th}text-align:right;">Net CF</th>
-          <th style="${th}text-align:right;">Portfolio</th>
-          <th style="${th}text-align:right;">Props</th>
-          <th style="${th}text-align:right;">Months</th>
-        </tr>
-        ${supportRows}
-      </table>
+      ${supportCards}
+
+      <h2 style="${sectionTitle}">Top Players & Guests</h2>
+      <p style="font-size:13px;color:#465061;">Sorted by highest portfolio value. Long list — at the end of the email so it can extend without pushing other sections out of view.</p>
+      ${actorCards}
 
       <p style="margin-top:24px;font-size:12px;color:#7c8895;line-height:1.55;">
         Guest identities are anonymous unless the player explicitly requested
