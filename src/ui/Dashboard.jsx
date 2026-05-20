@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useGame } from '../core/gameState.js'
 import { setModalOpen, toggleTrivia, openInvestModal, dismissWin, markTutorialSeen } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
+import { useActivityLogger } from '../hooks/useActivityLogger.js'
 import { auth } from '../firebase/config.js'
 import PortfolioSummary from './PortfolioSummary.jsx'
 import AlertsPanel from './AlertsPanel.jsx'
@@ -67,6 +68,9 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   const [tutorialAuto,   setTutorialAuto]   = useState(false)  // distinguishes auto-launch from manual ? click
 
   useMarketRate(dispatch)
+  // Fire-and-forget gameplay activity events to /api/logGameActivity.
+  // Failures swallowed — never blocks rendering or dispatches anything.
+  useActivityLogger(state)
 
   // Auto-launch the tutorial on the first render of a brand-new game
   // (i.e. when state.tutorialSeen is false AND the player hasn't built

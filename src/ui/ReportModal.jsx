@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGame } from '../core/gameState.js'
 import { createReportPayload } from '../systems/reportingSystem.js'
 import { auth } from '../firebase/config.js'
+import { logActivity, logSnapshot } from '../services/logGameActivity.js'
 
 // Player-facing detailed-report request form. The player enters a name +
 // email and a contact preference (radio, default = report only). On submit
@@ -57,6 +58,25 @@ export default function ReportModal({ onClose }) {
       const data = await res.json().catch(() => ({ ok: false }))
       if (data?.ok) {
         setStatus('sent')
+        // Fire activity events (fire-and-forget; never blocks the success UI).
+        const supportFlag = pref === 'requestSupport'
+        logActivity('report_requested', {
+          state,
+          playerName:        name.trim(),
+          playerEmail:       email.trim(),
+          contactPreference: pref,
+          requestedSupport:  supportFlag,
+        })
+        if (supportFlag) {
+          logActivity('support_requested', {
+            state,
+            playerName:        name.trim(),
+            playerEmail:       email.trim(),
+            contactPreference: pref,
+            requestedSupport:  true,
+          })
+        }
+        logSnapshot(state, { force: true })
       } else {
         setStatus('error')
         setSendErr(data?.error || 'Something went wrong. Please try again.')
