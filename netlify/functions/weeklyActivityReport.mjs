@@ -22,6 +22,19 @@ function num(n) {
   if (!isFinite(v)) return '—'
   return `$${Math.round(v).toLocaleString('en-US')}`
 }
+// Compact $ for narrow table cells in the email — e.g. $16,364,624,429 → $16.4B.
+// Use in wide tables only; keep num() for headline stats where space is plentiful.
+function numShort(n) {
+  const v = Number(n)
+  if (!isFinite(v)) return '—'
+  const abs  = Math.abs(v)
+  const sign = v < 0 ? '-' : ''
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1e9).toFixed(1)}B`
+  if (abs >= 1_000_000)     return `${sign}$${(abs / 1e6).toFixed(1)}M`
+  if (abs >= 10_000)        return `${sign}$${Math.round(abs / 1000)}K`
+  if (abs >= 1_000)         return `${sign}$${(abs / 1000).toFixed(1)}K`
+  return `${sign}$${Math.round(abs).toLocaleString('en-US')}`
+}
 function plain(n) {
   const v = Number(n)
   return isFinite(v) ? v.toLocaleString('en-US') : '—'
@@ -147,11 +160,16 @@ function aggregate(events) {
 
 // ─── Email composition ─────────────────────────────────────────
 function buildHtml(stats, range) {
-  const th = 'padding:6px 10px;text-align:left;background:#0f2a43;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.04em;'
+  // Tight padding + small font-size so the 9-column "Top Players" table can
+  // collapse to fit narrow Gmail/Outlook panes (Gmail strips overflow:auto
+  // on divs, so we can't rely on a horizontal-scroll wrapper — the table
+  // itself has to fit the container at every width).
+  const th = 'padding:6px 6px;text-align:left;background:#0f2a43;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.03em;'
   const sectionTitle = 'margin:24px 0 8px;font-size:16px;color:#0f2a43;border-bottom:2px solid #38bdf8;padding-bottom:4px;'
-  // Cell styles. Long-content cells get word-break so emails / long uids
-  // don't blow out the table on narrow viewports.
-  const td      = 'padding:4px 10px;border-bottom:1px solid #eee;word-break:break-word;overflow-wrap:anywhere;'
+  // Long-content cells word-break so emails/long uids wrap instead of
+  // forcing the table wider. Numeric cells use nowrap so $ amounts and
+  // dates stay on one line.
+  const td      = 'padding:4px 6px;border-bottom:1px solid #eee;word-break:break-word;overflow-wrap:anywhere;font-size:11px;'
   const tdRight = td + 'text-align:right;white-space:nowrap;'
 
   // Top Players table — explicit column widths so columns distribute
@@ -162,9 +180,9 @@ function buildHtml(stats, range) {
     <tr>
       <td style="${td}">${esc(a.isUid ? `uid:${a.id.slice(0, 10)}…` : `guest:${a.id.slice(0, 10)}…`)}</td>
       <td style="${tdRight}">${plain(a.sessionCount)}</td>
-      <td style="${tdRight}">${a.highestCashFlow != null ? num(a.highestCashFlow) + '/mo' : '—'}</td>
-      <td style="${tdRight}">${a.highestPortfolio != null ? num(a.highestPortfolio) : '—'}</td>
-      <td style="${tdRight}">${a.highestEquity != null ? num(a.highestEquity) : '—'}</td>
+      <td style="${tdRight}">${a.highestCashFlow != null ? numShort(a.highestCashFlow) + '/mo' : '—'}</td>
+      <td style="${tdRight}">${a.highestPortfolio != null ? numShort(a.highestPortfolio) : '—'}</td>
+      <td style="${tdRight}">${a.highestEquity != null ? numShort(a.highestEquity) : '—'}</td>
       <td style="${tdRight}">${plain(a.propertiesOwned)}</td>
       <td style="${tdRight}">${plain(a.reportRequests)}</td>
       <td style="${tdRight}">${a.supportRequested ? '✅' : '—'}</td>
@@ -175,8 +193,8 @@ function buildHtml(stats, range) {
     <tr>
       <td style="${td}">${esc(e.playerName || '—')}</td>
       <td style="${td}">${esc(e.playerEmail || '—')}</td>
-      <td style="${tdRight}">${num(e.monthlyCashFlow)}/mo</td>
-      <td style="${tdRight}">${num(e.portfolioValue)}</td>
+      <td style="${tdRight}">${numShort(e.monthlyCashFlow)}/mo</td>
+      <td style="${tdRight}">${numShort(e.portfolioValue)}</td>
       <td style="${tdRight}">${plain(e.propertiesOwned)}</td>
       <td style="${tdRight}">${plain(e.monthsPlayed)}</td>
     </tr>`).join('') || `<tr><td colspan="6" style="padding:8px 10px;color:#888;">No support requests this week.</td></tr>`
@@ -206,57 +224,53 @@ function buildHtml(stats, range) {
       </table>
 
       <h2 style="${sectionTitle}">Top Players & Guests</h2>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;">
-        <table style="width:100%;min-width:680px;table-layout:fixed;border-collapse:collapse;font-size:12px;">
-          <colgroup>
-            <col style="width:22%;" />
-            <col style="width:9%;" />
-            <col style="width:12%;" />
-            <col style="width:13%;" />
-            <col style="width:12%;" />
-            <col style="width:7%;" />
-            <col style="width:8%;" />
-            <col style="width:7%;" />
-            <col style="width:10%;" />
-          </colgroup>
-          <tr>
-            <th style="${th}">Actor</th>
-            <th style="${th}text-align:right;">Sessions</th>
-            <th style="${th}text-align:right;">Top CF</th>
-            <th style="${th}text-align:right;">Top Portfolio</th>
-            <th style="${th}text-align:right;">Top Equity</th>
-            <th style="${th}text-align:right;">Props</th>
-            <th style="${th}text-align:right;">Reports</th>
-            <th style="${th}text-align:right;">Support</th>
-            <th style="${th}text-align:right;">Last Active</th>
-          </tr>
-          ${actorRows}
-        </table>
-      </div>
+      <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
+        <colgroup>
+          <col style="width:22%;" />
+          <col style="width:8%;" />
+          <col style="width:13%;" />
+          <col style="width:13%;" />
+          <col style="width:13%;" />
+          <col style="width:8%;" />
+          <col style="width:8%;" />
+          <col style="width:7%;" />
+          <col style="width:8%;" />
+        </colgroup>
+        <tr>
+          <th style="${th}">Actor</th>
+          <th style="${th}text-align:right;">Sess.</th>
+          <th style="${th}text-align:right;">CF</th>
+          <th style="${th}text-align:right;">Portfolio</th>
+          <th style="${th}text-align:right;">Equity</th>
+          <th style="${th}text-align:right;">Props</th>
+          <th style="${th}text-align:right;">Rpts</th>
+          <th style="${th}text-align:right;">Sup.</th>
+          <th style="${th}text-align:right;">Active</th>
+        </tr>
+        ${actorRows}
+      </table>
 
       <h2 style="${sectionTitle}">Support Requests</h2>
       <p style="font-size:13px;color:#465061;">Players who explicitly requested follow-up via the in-game form.</p>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;">
-        <table style="width:100%;min-width:560px;table-layout:fixed;border-collapse:collapse;font-size:13px;">
-          <colgroup>
-            <col style="width:18%;" />
-            <col style="width:32%;" />
-            <col style="width:14%;" />
-            <col style="width:14%;" />
-            <col style="width:10%;" />
-            <col style="width:12%;" />
-          </colgroup>
-          <tr>
-            <th style="${th}">Name</th>
-            <th style="${th}">Email</th>
-            <th style="${th}text-align:right;">Net CF</th>
-            <th style="${th}text-align:right;">Portfolio</th>
-            <th style="${th}text-align:right;">Props</th>
-            <th style="${th}text-align:right;">Months</th>
-          </tr>
-          ${supportRows}
-        </table>
-      </div>
+      <table style="width:100%;table-layout:fixed;border-collapse:collapse;">
+        <colgroup>
+          <col style="width:18%;" />
+          <col style="width:34%;" />
+          <col style="width:14%;" />
+          <col style="width:14%;" />
+          <col style="width:8%;" />
+          <col style="width:12%;" />
+        </colgroup>
+        <tr>
+          <th style="${th}">Name</th>
+          <th style="${th}">Email</th>
+          <th style="${th}text-align:right;">Net CF</th>
+          <th style="${th}text-align:right;">Portfolio</th>
+          <th style="${th}text-align:right;">Props</th>
+          <th style="${th}text-align:right;">Months</th>
+        </tr>
+        ${supportRows}
+      </table>
 
       <p style="margin-top:24px;font-size:12px;color:#7c8895;line-height:1.55;">
         Guest identities are anonymous unless the player explicitly requested
