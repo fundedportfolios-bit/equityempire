@@ -153,6 +153,9 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
       onSave={handleSave}
       onExit={handleExit}
       slotIndex={slotIndex}
+      user={user}
+      debugInfo={debugInfo}
+      onTestWrite={cloud ? handleTestWrite : null}
     />
   )
 }
