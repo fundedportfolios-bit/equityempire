@@ -39,6 +39,7 @@ export function useLeaderboardSync(state, dispatch, ctx) {
         let popup = null
         for (const board of res.boardsChanged) {
           const rank = await getRankForRun(board, state.runId)
+          console.log('[leaderboard] rank on', board, '→', rank ?? 'not found in board')
           if (cancelled) return
           if (rank != null && rank <= 5) {
             const last = profile.lastNotifiedRankByBoard?.[board]
@@ -58,7 +59,7 @@ export function useLeaderboardSync(state, dispatch, ctx) {
         dispatch(setLeaderboardProfile(finalProfile))
         if (popup) setTopFive(popup)
       } catch (e) {
-        console.warn('[leaderboard] sync failed:', e?.message)
+        console.warn('[leaderboard] sync failed:', e?.code || '(no code)', '—', e?.message)
       } finally {
         runningRef.current = false
       }

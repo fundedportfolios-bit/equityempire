@@ -26,7 +26,7 @@ import LeaderboardSignupModal from './LeaderboardSignupModal.jsx'
 import LeaderboardTopFiveModal from './LeaderboardTopFiveModal.jsx'
 
 // ─── FirebaseDebugPanel ────────────────────────────────────
-function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite }) {
+function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite, leaderboard }) {
   const [open, setOpen] = useState(false)
   const cu = auth.currentUser
 
@@ -48,6 +48,15 @@ function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite }) {
           <div className="debug-row"><span className="debug-key">Last Save Result</span><span className="debug-val">{debugInfo.lastResult ?? '—'}</span></div>
           {debugInfo.lastError && (
             <div className="debug-row debug-row--error"><span className="debug-key">Last Error</span><span className="debug-val debug-mono">{debugInfo.lastError}</span></div>
+          )}
+          {leaderboard && (
+            <>
+              <div className="debug-row"><span className="debug-key">Leaderboard</span><span className="debug-val">{leaderboard.profile?.leaderboardEnabled ? `✅ joined as "${leaderboard.profile.publicUsername}"` : '— not joined'}</span></div>
+              <div className="debug-row"><span className="debug-key">Run ID</span><span className="debug-val debug-mono">{leaderboard.runId ?? '—'}</span></div>
+              {leaderboard.profile?.leaderboardEnabled && (
+                <div className="debug-row"><span className="debug-key">LB Submitted</span><span className="debug-val debug-mono">{JSON.stringify(leaderboard.profile.lastSubmitted || {})}</span></div>
+              )}
+            </>
           )}
           {onTestWrite && (
             <button className="debug-test-btn" onClick={onTestWrite}>
@@ -285,6 +294,7 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
           slotIndex={slotIndex}
           debugInfo={debugInfo}
           onTestWrite={onTestWrite}
+          leaderboard={{ profile: state.leaderboardProfile, runId: state.runId }}
         />
       )}
     </div>

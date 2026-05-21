@@ -158,6 +158,12 @@ function entryRef(boardType, runId) {
 
 async function submitEntry(entry) {
   await setDoc(entryRef(entry.boardType, entry.runId), entry, { merge: true })
+  console.log(`[leaderboard] ✓ wrote entry → leaderboard/${entry.boardType}/entries/${entry.runId}`, {
+    username:              entry.publicUsername,
+    monthReached:          entry.monthReached,
+    portfolioValue:        entry.portfolioValue,
+    highestPortfolioValue: entry.highestPortfolioValue,
+  })
 }
 
 // ─── Ranking comparators (client-side, after Firestore orderBy) ──
@@ -226,6 +232,11 @@ export async function removeRunEntries(runId) {
 export async function syncSlot(state, ctx, opts = {}) {
   const profile = state.leaderboardProfile
   if (!profile?.leaderboardEnabled || !state.runId || !ctx?.uid) {
+    console.log('[leaderboard] syncSlot skipped —', {
+      leaderboardEnabled: !!profile?.leaderboardEnabled,
+      runId:              state.runId || null,
+      uid:                ctx?.uid || null,
+    })
     return { updatedProfile: profile, boardsChanged: [], wrote: false }
   }
   const force     = !!opts.force
@@ -279,5 +290,11 @@ export async function syncSlot(state, ctx, opts = {}) {
     }
   }
 
+  if (boardsChanged.length === 0) {
+    console.log('[leaderboard] syncSlot ran — nothing to write', {
+      portfolio, highest, month, force,
+      lastSubmitted: profile.lastSubmitted,
+    })
+  }
   return { updatedProfile: nextProfile, boardsChanged, wrote: boardsChanged.length > 0 }
 }
