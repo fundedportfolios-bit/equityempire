@@ -278,7 +278,10 @@ export async function syncSlot(state, ctx, opts = {}) {
   {
     const prev      = profile.lastSubmitted?.biggest_empire
     const isNewHigh = !prev || highest > (prev.highestPortfolioValue || 0)
-    if (highest > 0 && (force || isNewHigh)) {
+    // On force (join / exit) always record — even a brand-new $0 run — so a
+    // freshly-joined slot appears on the board immediately. Otherwise it takes
+    // a genuine new high, and the throttle below still applies.
+    if (force || (highest > 0 && isNewHigh)) {
       const passesThrottle = force || !prev
         || highest >= (prev.highestPortfolioValue || 0) * 1.10
         || (month - (prev.month || 0)) >= 12
