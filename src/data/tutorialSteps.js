@@ -101,11 +101,22 @@ export const TUTORIAL_STEPS = [
     fallbackPlacement: 'center',
   },
   {
+    id:                'report',
+    title:             'Progress Report',
+    body:              'Send yourself a detailed progress report anytime you like.',
+    target:            'action-report',
+    placement:         'below',
+    fallbackPlacement: 'center',
+  },
+  // Finale card — `isFinale: true` means TutorialOverlay hides the step
+  // counter and treats this as a closer after the 12 numbered steps.
+  {
     id:                'ready',
     title:             'Time to Invest!',
     body:              'Pick your first investment carefully and start managing and growing your empire!',
     target:            null,
     placement:         'center',
     fallbackPlacement: 'center',
+    isFinale:          true,
   },
 ]

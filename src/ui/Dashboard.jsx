@@ -126,6 +126,7 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
             onClick={() => { dispatch(setModalOpen(true)); setReportOpen(true) }}
             aria-label="Report"
             title="Report"
+            data-tutorial="action-report"
           >
             <span className="hdr-btn-icon">📋</span>
             <span className="hdr-btn-text">Report</span>

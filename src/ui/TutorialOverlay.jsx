@@ -55,7 +55,10 @@ function computeCardPosition(targetEl, placement, fallbackPlacement) {
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)) }
 
 // Step card with pointer placement (or centered as fallback).
-function StepCard({ step, index, total, onBack, onNext, onSkip, onDone }) {
+// `numberedTotal` excludes any trailing finale steps so the counter reads
+// "Step N of 12" across the regular tour and the finale card itself shows
+// no counter at all (it's an un-numbered closer).
+function StepCard({ step, index, total, numberedTotal, onBack, onNext, onSkip, onDone }) {
   const [pos, setPos] = useState({ mode: 'center' })
   const [highlightRect, setHighlightRect] = useState(null)
 
@@ -120,7 +123,9 @@ function StepCard({ step, index, total, onBack, onNext, onSkip, onDone }) {
         role="dialog"
         aria-labelledby={`tutorial-title-${step.id}`}
       >
-        <div className="tutorial-step-count">Step {index + 1} of {total}</div>
+        {!step.isFinale && (
+          <div className="tutorial-step-count">Step {index + 1} of {numberedTotal}</div>
+        )}
         <h2 id={`tutorial-title-${step.id}`} className="tutorial-title">{step.title}</h2>
         <p className="tutorial-body">{step.body}</p>
         <div className="tutorial-actions">
@@ -160,11 +165,16 @@ export default function TutorialOverlay({ onClose, showWelcome = true }) {
   if (phase === 'welcome') {
     return <WelcomeScreen onStart={handleStart} onSkip={handleSkip} />
   }
+  // Numbered total excludes any `isFinale` cards so the counter stays at
+  // "Step N of 12" regardless of how many un-numbered closer cards exist.
+  const numberedTotal = TUTORIAL_STEPS.filter(s => !s.isFinale).length
+
   return (
     <StepCard
       step={TUTORIAL_STEPS[index]}
       index={index}
       total={TUTORIAL_STEPS.length}
+      numberedTotal={numberedTotal}
       onBack={handleBack}
       onNext={handleNext}
       onSkip={handleSkip}
