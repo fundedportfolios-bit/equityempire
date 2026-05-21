@@ -56,6 +56,13 @@ export default function LeaderboardSignupModal({ uid, onConfirm, onClose }) {
     setBusy(true)
     try {
       const avail = await checkUsernameAvailability(v.usernameLower, uid)
+      // Distinguish "couldn't check" (network / rules not deployed) from a
+      // genuinely-taken name — they are very different problems.
+      if (avail.error) {
+        setError(avail.error)
+        setBusy(false)
+        return
+      }
       if (!avail.available) {
         setError('That username is already taken. Please choose another.')
         setBusy(false)

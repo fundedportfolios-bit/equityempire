@@ -53,8 +53,14 @@ export async function checkUsernameAvailability(usernameLower, uid) {
     if (data.ownerUserId === uid) return { available: true, ownedBySelf: true, username: data.username }
     return { available: false, ownedBySelf: false }
   } catch (e) {
-    console.warn('[leaderboard] username availability check failed:', e?.message)
-    return { available: false, ownedBySelf: false, error: 'Could not check availability.' }
+    console.warn('[leaderboard] username availability check failed:', e?.code, e?.message)
+    // A permission-denied error here almost always means the Firestore
+    // security rules for `leaderboardUsernames` haven't been deployed yet.
+    // Never report this as "username taken" — that's a different thing.
+    const error = e?.code === 'permission-denied'
+      ? 'The leaderboard isn’t available yet. Please try again later.'
+      : 'Could not check that username. Check your connection and try again.'
+    return { available: false, ownedBySelf: false, error }
   }
 }
 
