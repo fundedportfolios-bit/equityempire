@@ -30,6 +30,16 @@ import {
 import { selectTriviaQuestion } from '../systems/triviaSystem.js'
 import { TRIVIA_RULES } from '../data/triviaRules.js'
 
+// Stable per-run identifier for the leaderboard. crypto.randomUUID is
+// available in every modern browser over HTTPS (and in Node 16+); the
+// fallback covers any environment that lacks it.
+export function generateRunId() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return `run_${crypto.randomUUID()}`
+  } catch { /* fall through */ }
+  return `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+}
+
 export const INITIAL_STATE = {
   // Player financials
   cash: 50000,
@@ -85,6 +95,12 @@ export const INITIAL_STATE = {
   winner: false,
   tutorialSeen: false,  // set true after first completion/skip; persists with save
 
+  // Leaderboard — runId uniquely identifies this game run for the leaderboard
+  // (a save slot is just (uid, slotIndex); runId survives save/load and is the
+  // stable per-run identity). leaderboardProfile is null until the slot opts in.
+  runId: null,
+  leaderboardProfile: null,
+
   // Reporting (captures gameplay data for the future emailed game report)
   reporting: REPORTING_DEFAULTS,
 
@@ -102,6 +118,9 @@ export function gameReducer(state, action) {
         cashFlowGoal:  action.payload.cashFlowGoal || 10000,
         cash:          settings.startingCash,
         gameStarted:   true,
+        // Mint a stable run id for this new game (leaderboard identity).
+        runId:         generateRunId(),
+        leaderboardProfile: null,
         // Seed reporting with starting cash + month so the report can show
         // "started with X, ended with Y" later.
         reporting: initializeReportingState({
@@ -1023,6 +1042,10 @@ export function gameReducer(state, action) {
         // Migrate reporting: fill missing fields with defaults so older saves
         // that predate this system still load cleanly.
         reporting:     migrateReporting(saved.reporting),
+        // Leaderboard: assign a runId to pre-leaderboard saves so they have a
+        // stable identity; carry the existing leaderboardProfile if present.
+        runId:              saved.runId || generateRunId(),
+        leaderboardProfile: saved.leaderboardProfile ?? null,
         gameStarted:   true,
       }
     }
@@ -1046,6 +1069,11 @@ export function gameReducer(state, action) {
 
     case 'MARK_TUTORIAL_SEEN':
       return { ...state, tutorialSeen: true }
+
+    case 'SET_LEADERBOARD_PROFILE':
+      // Replaces the whole leaderboardProfile object. The leaderboard sync
+      // layer owns this object and passes a fully-formed replacement.
+      return { ...state, leaderboardProfile: action.payload.profile }
 
     case 'SUBMIT_REPORT_REQUEST': {
       const { playerInfo } = action.payload || {}

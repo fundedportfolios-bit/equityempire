@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════
+// Equity Empire — Firestore security rules
+//
+// ⚠️  REVIEW BEFORE DEPLOYING.  The `users/{userId}` block below must
+//     match the rule currently live in the Firebase Console that
+//     protects cloud saves. If the live rule differs, reconcile the
+//     two first — deploying a file that drops it WILL break save/load.
+//
+// Deploy with:   firebase deploy --only firestore:rules
+// or paste this file into  Console → Firestore Database → Rules.
+//
+// Anti-cheat is intentionally light for v1: a signed-in user may write
+// any score for a run they own. Server-side score validation could be
+// added later via a Cloud Function without changing the client.
+// ═══════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Cloud saves — owner-only.  Reproduces the existing Console
+    //    rule so deploying this file does not break save/load. ──
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // ── Leaderboard entries — public read, owner-only write. ──
+    //    Path: leaderboard/{boardType}/entries/{runId}
+    match /leaderboard/{boardType}/entries/{runId} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // ── Username reservations — public read (availability checks),
+    //    create/update locked to the owning uid, never deletable. ──
+    match /leaderboardUsernames/{usernameLower} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.ownerUserId == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.ownerUserId == request.auth.uid
+        && request.resource.data.ownerUserId == request.auth.uid;
+      allow delete: if false;
+    }
+  }
+}

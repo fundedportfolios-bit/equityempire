@@ -2578,6 +2578,213 @@ body {
   font-weight: 600;
 }
 
+/* ─── Leaderboard ────────────────────────────────────────────── */
+/* Tabs */
+.lb-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.lb-tab {
+  flex: 1;
+  padding: 8px 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms;
+}
+.lb-tab--active {
+  color: #38bdf8;
+  border-bottom-color: #38bdf8;
+}
+.lb-limit-note {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 0 0 4px;
+}
+
+/* Rows */
+.lb-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lb-row {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.lb-row--podium { border-color: rgba(245,158,11,0.4); }
+.lb-row--mine {
+  border-color: #38bdf8;
+  background: rgba(56,189,248,0.06);
+}
+.lb-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lb-rank {
+  font-weight: 800;
+  font-size: 0.9rem;
+  min-width: 34px;
+  color: var(--text-muted);
+}
+.lb-rank--1 { color: #fbbf24; }
+.lb-rank--2 { color: #cbd5e1; }
+.lb-rank--3 { color: #d97706; }
+.lb-username {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-mine-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #38bdf8;
+  color: #04223a;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.lb-headline {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--positive);
+  white-space: nowrap;
+}
+.lb-row-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.lb-stat-chip {
+  display: inline-flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.lb-stat-chip-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.lb-stat-chip-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Signup modal */
+.lb-signup-body {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+.lb-signup-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.lb-signup-existing-select { margin: 2px 0 4px 26px; width: calc(100% - 26px); }
+
+/* Home-screen preview */
+.lb-preview {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 0.6rem;
+}
+.lb-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lb-preview-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.lb-preview-view-btn { white-space: nowrap; }
+.lb-preview-status {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 4px 0 0;
+}
+.lb-preview-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lb-preview-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+.lb-preview-board { color: var(--text-muted); flex-shrink: 0; }
+.lb-preview-leader {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+}
+.lb-preview-name {
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-preview-value { color: var(--positive); font-weight: 600; white-space: nowrap; }
+.lb-preview-empty { color: var(--text-dim); font-style: italic; }
+
+/* Per-slot join button / badge on SlotScreen */
+.slot-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+.slot-lb-join-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid rgba(245,158,11,0.45);
+  color: #f59e0b;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.slot-lb-join-btn:hover { background: rgba(245,158,11,0.1); }
+.slot-lb-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--positive);
+}
+
 /* ─── Tutorial overlay ───────────────────────────────────────── */
 .tutorial-overlay {
   position: fixed;

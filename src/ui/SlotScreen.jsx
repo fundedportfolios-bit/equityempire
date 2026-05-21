@@ -1,11 +1,16 @@
 import { useState, useEffect }                                from 'react'
 import { signOut }                                           from 'firebase/auth'
 import { auth }                                              from '../firebase/config.js'
-import { getAllSlotsFromFirestore, deleteSlotFromFirestore }  from '../firebase/firestoreService.js'
+import { getAllSlotsFromFirestore, deleteSlotFromFirestore, saveSlotToFirestore } from '../firebase/firestoreService.js'
 import { getAllSlots, deleteSlot, SLOT_COUNT, getUserGoal, setUserGoal } from '../auth/saveSlots.js'
 import { DIFFICULTY_SETTINGS }                               from '../data/difficultySettings.js'
 import { formatShort }                                       from '../utils/formatters.js'
 import { formatMonthLabel }                                  from '../core/timeSystem.js'
+import { generateRunId }                                     from '../core/gameState.js'
+import { syncSlot, removeRunEntries }                        from '../systems/leaderboardSystem.js'
+import LeaderboardPreview                                    from './LeaderboardPreview.jsx'
+import LeaderboardScreen                                     from './LeaderboardScreen.jsx'
+import LeaderboardSignupModal                                from './LeaderboardSignupModal.jsx'
 
 const GOAL_OPTIONS = [5000, ...Array.from({ length: 23 }, (_, i) => 6000 + i * 2000)]
 const isCloudUser  = (user) => user?.id && user.id !== 'guest'
@@ -23,7 +28,7 @@ function readCachedApr() {
 }
 
 // ─── SlotCard ─────────────────────────────────────────────
-function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelete }) {
+function SlotCard({ slotIndex, data, defaultGoal, canJoinLeaderboard, onNewGame, onContinue, onDelete, onJoinLeaderboard }) {
   const [pickingDifficulty, setPickingDifficulty] = useState(false)
   const [confirmDelete,     setConfirmDelete]     = useState(false)
   // Initial goal for the picker: saved game's existing goal if any, else default.
@@ -38,6 +43,7 @@ function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelet
       : '—'
     const monthLabel    = formatMonthLabel(state.currentMonth ?? 1).replace(' — ', ' ')
     const propCount     = state.properties?.length ?? 0
+    const onLeaderboard = !!state.leaderboardProfile?.leaderboardEnabled
 
     return (
       <div className="slot-card slot-card--filled">
@@ -79,6 +85,19 @@ function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelet
           </select>
         </div>
 
+        {/* Per-slot leaderboard opt-in. Guests see no Join button. */}
+        {onLeaderboard ? (
+          <div className="slot-lb-row">
+            <span className="slot-lb-badge">🏆 On Leaderboard</span>
+          </div>
+        ) : canJoinLeaderboard ? (
+          <div className="slot-lb-row">
+            <button className="slot-lb-join-btn" onClick={() => onJoinLeaderboard(slotIndex)}>
+              🏆 Join Leaderboard
+            </button>
+          </div>
+        ) : null}
+
         <p className="slot-saved-at">Last saved {savedDate}</p>
 
         <div className="slot-actions">
@@ -87,7 +106,11 @@ function SlotCard({ slotIndex, data, defaultGoal, onNewGame, onContinue, onDelet
           </button>
           {confirmDelete ? (
             <div className="slot-delete-confirm">
-              <span>Delete this save?</span>
+              <span>
+                {onLeaderboard
+                  ? 'This save is connected to the leaderboard. Deleting it will also remove this run from the leaderboard, including any Fastest to $1B, Fastest to $10B, or Biggest Empire Ever entries from this save. Other players may move up in the rankings. Are you sure?'
+                  : 'Delete this save?'}
+              </span>
               <button className="btn btn-danger btn-sm" onClick={onDelete}>Yes, delete</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>Cancel</button>
             </div>
@@ -152,6 +175,10 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   const [loading, setLoading] = useState(cloud)
   const [apr]                 = useState(readCachedApr)
 
+  // Leaderboard UI state.
+  const [lbScreenOpen, setLbScreenOpen] = useState(false)
+  const [joiningSlot,  setJoiningSlot]  = useState(null)  // slot index mid-join, or null
+
   // Default goal saved per user — used as the starting selection in each
   // empty slot card. Persists last-used goal so the dropdown isn't reset.
   const [defaultGoal, setDefaultGoal] = useState(() => getUserGoal(user.id))
@@ -178,9 +205,16 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDelete(i) {
+    const slotData = slots?.[i]
+    const onLb     = !!slotData?.state?.leaderboardProfile?.leaderboardEnabled
+    const runId    = slotData?.state?.runId
     if (cloud) {
       try {
         await deleteSlotFromFirestore(user.id, i)
+        // Remove this run's leaderboard entries (only this run — other slots
+        // from the same user are untouched). Username reservation is
+        // user-level and intentionally kept.
+        if (onLb && runId) await removeRunEntries(runId)
         const updated = await getAllSlotsFromFirestore(user.id)
         setSlots(updated)
       } catch (e) {
@@ -191,6 +225,27 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
       deleteSlot(user.id, i)
       setSlots(getAllSlots(user.id))
     }
+  }
+
+  // Confirmed leaderboard signup for a save slot (cloud users only). Writes
+  // the profile into the slot's saved state, backfills leaderboard entries,
+  // and persists. The run is NOT loaded into the game for this.
+  async function handleSlotJoinConfirm(slotIndex, profile) {
+    const slotData = slots?.[slotIndex]
+    if (!slotData?.state) { setJoiningSlot(null); return }
+    const baseState = { ...slotData.state, leaderboardProfile: profile }
+    if (!baseState.runId) baseState.runId = generateRunId()
+    try {
+      const res = await syncSlot(baseState, { uid: user.id, saveSlotIndex: slotIndex }, { force: true, backfilled: true })
+      const finalState = { ...baseState, leaderboardProfile: res.updatedProfile || profile }
+      await saveSlotToFirestore(user.id, slotIndex, finalState)
+      const updated = await getAllSlotsFromFirestore(user.id)
+      setSlots(updated)
+    } catch (e) {
+      console.error('[SlotScreen] leaderboard join failed:', e)
+      alert(`Could not join the leaderboard: ${e.message}`)
+    }
+    setJoiningSlot(null)
   }
 
   async function handleLogout() {
@@ -228,6 +283,8 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
           <span className="slot-apr-value">{(apr * 100).toFixed(2)}%</span>
         </div>
         <p className="slot-apr-note">Today's investments will lock in this rate!</p>
+
+        <LeaderboardPreview onView={() => setLbScreenOpen(true)} />
       </div>
 
       <h2 className="slot-choose-label">Choose a Save Slot</h2>
@@ -243,15 +300,28 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
             slotIndex={i}
             data={data}
             defaultGoal={defaultGoal}
+            canJoinLeaderboard={cloud}
             onNewGame={(difficulty, goal) => {
               persistDefaultGoal(goal)
               onSelectSlot({ slotIndex: i, isNew: true, difficulty, cashFlowGoal: goal })
             }}
             onContinue={(goal) => onSelectSlot({ slotIndex: i, isNew: false, cashFlowGoal: goal })}
             onDelete={() => handleDelete(i)}
+            onJoinLeaderboard={(idx) => setJoiningSlot(idx)}
           />
         ))}
       </div>
+
+      {lbScreenOpen && (
+        <LeaderboardScreen onClose={() => setLbScreenOpen(false)} />
+      )}
+      {joiningSlot != null && (
+        <LeaderboardSignupModal
+          uid={user.id}
+          onConfirm={(profile) => handleSlotJoinConfirm(joiningSlot, profile)}
+          onClose={() => setJoiningSlot(null)}
+        />
+      )}
     </div>
   )
 }

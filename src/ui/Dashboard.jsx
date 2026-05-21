@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGame } from '../core/gameState.js'
-import { setModalOpen, toggleTrivia, openInvestModal, dismissWin, markTutorialSeen } from '../core/gameEngine.js'
+import { setModalOpen, toggleTrivia, openInvestModal, dismissWin, markTutorialSeen, setLeaderboardProfile } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
 import { useActivityLogger } from '../hooks/useActivityLogger.js'
+import { useLeaderboardSync } from '../hooks/useLeaderboardSync.js'
+import { THRESHOLD_1B } from '../data/gameVersion.js'
 import { auth } from '../firebase/config.js'
 import PortfolioSummary from './PortfolioSummary.jsx'
 import AlertsPanel from './AlertsPanel.jsx'
@@ -19,6 +21,9 @@ import WinModal from './WinModal.jsx'
 import MilestoneModal from './MilestoneModal.jsx'
 import ReportModal from './ReportModal.jsx'
 import TutorialOverlay from './TutorialOverlay.jsx'
+import LeaderboardScreen from './LeaderboardScreen.jsx'
+import LeaderboardSignupModal from './LeaderboardSignupModal.jsx'
+import LeaderboardTopFiveModal from './LeaderboardTopFiveModal.jsx'
 
 // ─── FirebaseDebugPanel ────────────────────────────────────
 function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite }) {
@@ -66,11 +71,55 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   const [reportOpen,     setReportOpen]     = useState(false)
   const [tutorialOpen,   setTutorialOpen]   = useState(false)
   const [tutorialAuto,   setTutorialAuto]   = useState(false)  // distinguishes auto-launch from manual ? click
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false)
+  const [signupOpen,      setSignupOpen]      = useState(false)
+  const lbPromptedRef = useRef(false)  // session flag — only prompt to join once
 
   useMarketRate(dispatch)
   // Fire-and-forget gameplay activity events to /api/logGameActivity.
   // Failures swallowed — never blocks rendering or dispatches anything.
   useActivityLogger(state)
+
+  // ─── Leaderboard ──────────────────────────────────────────────
+  // Leaderboard identity = signed-in Firebase uid (guests can't join).
+  const isSignedIn = !!user && user.id && user.id !== 'guest'
+  const lbCtx = { uid: isSignedIn ? user.id : null, saveSlotIndex: slotIndex }
+  // Auto-tracking + Top-5 popup for a joined run.
+  const { topFive, dismissTopFive } = useLeaderboardSync(state, dispatch, lbCtx)
+
+  // In-game join prompt — once per session, when a signed-in player crosses
+  // $1B in a run that hasn't opted into the leaderboard yet.
+  useEffect(() => {
+    if (lbPromptedRef.current) return
+    if (!isSignedIn) return
+    if (state.leaderboardProfile?.leaderboardEnabled) return
+    if ((state.portfolioValue || 0) >= THRESHOLD_1B) {
+      lbPromptedRef.current = true
+      setSignupOpen(true)
+      dispatch(setModalOpen(true))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.portfolioValue])
+
+  function openLeaderboard() {
+    dispatch(setModalOpen(true))
+    setLeaderboardOpen(true)
+  }
+  function closeLeaderboard() {
+    setLeaderboardOpen(false)
+    dispatch(setModalOpen(false))
+  }
+  // Signup confirmed → store the profile; useLeaderboardSync detects the
+  // newly-enabled profile and runs a forced backfill sync automatically.
+  function handleJoinConfirm(profile) {
+    dispatch(setLeaderboardProfile(profile))
+    setSignupOpen(false)
+    dispatch(setModalOpen(false))
+  }
+  function closeSignup() {
+    setSignupOpen(false)
+    dispatch(setModalOpen(false))
+  }
 
   // Auto-launch the tutorial on the first render of a brand-new game
   // (i.e. when state.tutorialSeen is false AND the player hasn't built
@@ -120,6 +169,14 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
             title="Replay tutorial"
           >
             <span className="hdr-btn-icon">?</span>
+          </button>
+          <button
+            className="hdr-btn"
+            onClick={openLeaderboard}
+            aria-label="Leaderboard"
+            title="Leaderboard"
+          >
+            <span className="hdr-btn-icon">🏆</span>
           </button>
           <button
             className="hdr-btn"
@@ -203,6 +260,23 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       )}
       {tutorialOpen && (
         <TutorialOverlay onClose={closeTutorial} showWelcome={tutorialAuto || true} />
+      )}
+      {leaderboardOpen && (
+        <LeaderboardScreen currentRunId={state.runId} onClose={closeLeaderboard} />
+      )}
+      {signupOpen && isSignedIn && (
+        <LeaderboardSignupModal
+          uid={user.id}
+          onConfirm={handleJoinConfirm}
+          onClose={closeSignup}
+        />
+      )}
+      {topFive && (
+        <LeaderboardTopFiveModal
+          boardType={topFive.boardType}
+          rank={topFive.rank}
+          onClose={dismissTopFive}
+        />
       )}
 
       {debugInfo && (

@@ -164,6 +164,12 @@ export function submitReportRequest(playerInfo) {
   return { type: 'SUBMIT_REPORT_REQUEST', payload: { playerInfo } }
 }
 
+export function setLeaderboardProfile(profile) {
+  // profile: full leaderboardProfile object (or null). Owned by the
+  // leaderboard sync layer — see systems/leaderboardSystem.js.
+  return { type: 'SET_LEADERBOARD_PROFILE', payload: { profile } }
+}
+
 // Placeholder — will grow as win/loss conditions are defined
 export function checkWinLoss(state) {
   if (state.cash < 0 && state.monthlyIncome === 0) return 'loss'
