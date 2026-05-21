@@ -10,6 +10,7 @@ import { loadSlotFromFirestore, saveSlotToFirestore,
 import LoginScreen                                      from './ui/LoginScreen.jsx'
 import SlotScreen                                       from './ui/SlotScreen.jsx'
 import Dashboard                                        from './ui/Dashboard.jsx'
+import LeaderboardEmbed                                 from './embed/LeaderboardEmbed.jsx'
 
 const isCloudUser = (user) => user?.id && user.id !== 'guest'
 
@@ -263,5 +264,12 @@ function AppContent() {
 // ─── App ───────────────────────────────────────────────────────────────────
 
 export default function App() {
+  // Public embeddable leaderboard widget — a standalone, login-free,
+  // read-only route. Checked before AppContent so the game's existing
+  // login → slot → game flow is completely untouched. No router needed.
+  if (typeof window !== 'undefined' &&
+      window.location.pathname.replace(/\/+$/, '').toLowerCase() === '/leaderboard-embed') {
+    return <LeaderboardEmbed />
+  }
   return <AppContent />
 }

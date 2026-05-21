@@ -12,3 +12,23 @@
 [functions]
   # .mjs functions are ESM; Netlify Functions v2 runtime.
   node_bundler = "esbuild"
+
+# ── SPA client-side routing fallback ──
+# The app is a single-page app. Client routes (e.g. /leaderboard-embed)
+# have no real file on disk, so unmatched paths must fall back to
+# index.html. Real static assets (/assets/*) and the /api/* function
+# routes are resolved first, so this catch-all only affects SPA routes.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# ── Allow the public embed route to be framed by external sites ──
+# /leaderboard-embed is a public, read-only widget meant to be embedded
+# via <iframe>. `frame-ancestors *` permits any site to embed it; to
+# restrict it, replace * with your site, e.g. "https://yourdomain.com".
+# No X-Frame-Options is set anywhere, so framing is not otherwise blocked.
+[[headers]]
+  for = "/leaderboard-embed"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors *;"
