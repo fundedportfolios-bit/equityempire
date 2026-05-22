@@ -14,7 +14,7 @@ import {
 // uid, then hands a fresh profile back to the caller (which dispatches it +
 // runs the backfill sync).
 
-export default function LeaderboardSignupModal({ uid, onConfirm, onClose }) {
+export default function LeaderboardSignupModal({ uid, onConfirm, onClose, cancelLabel = 'Cancel' }) {
   const [existing,   setExisting]   = useState([])   // usernames this uid already owns
   const [mode,       setMode]       = useState('new') // 'new' | 'existing'
   const [chosenExisting, setChosenExisting] = useState('')
@@ -143,7 +143,7 @@ export default function LeaderboardSignupModal({ uid, onConfirm, onClose }) {
           {error && <p className="report-form-error">{error}</p>}
 
           <div className="win-actions report-request-actions">
-            <button className="win-btn-share" onClick={onClose} disabled={busy}>Cancel</button>
+            <button className="win-btn-share" onClick={onClose} disabled={busy}>{cancelLabel}</button>
             <button className="win-btn-continue" onClick={handleConfirm} disabled={busy}>
               {busy ? 'Joining…' : 'Join Leaderboard'}
             </button>

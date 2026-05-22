@@ -176,8 +176,9 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
   const [apr]                 = useState(readCachedApr)
 
   // Leaderboard UI state.
-  const [lbScreenOpen, setLbScreenOpen] = useState(false)
-  const [joiningSlot,  setJoiningSlot]  = useState(null)  // slot index mid-join, or null
+  const [lbScreenOpen,   setLbScreenOpen]   = useState(false)
+  const [joiningSlot,    setJoiningSlot]    = useState(null)  // slot index mid-join, or null
+  const [pendingNewGame, setPendingNewGame] = useState(null)  // { slotIndex, difficulty, goal } mid new-game signup
 
   // Default goal saved per user — used as the starting selection in each
   // empty slot card. Persists last-used goal so the dropdown isn't reset.
@@ -248,6 +249,23 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
     setJoiningSlot(null)
   }
 
+  // New-game leaderboard prompt. A logged-in player who picks a difficulty is
+  // offered leaderboard signup before the game starts. Either choice starts
+  // the game: joining carries a fresh profile into NEW_GAME, skipping carries
+  // null — they can still join later from this slot screen.
+  function startPendingNewGame(profile) {
+    const png = pendingNewGame
+    setPendingNewGame(null)
+    if (!png) return
+    onSelectSlot({
+      slotIndex:          png.slotIndex,
+      isNew:              true,
+      difficulty:         png.difficulty,
+      cashFlowGoal:       png.goal,
+      leaderboardProfile: profile || null,
+    })
+  }
+
   async function handleLogout() {
     if (cloud) {
       try { await signOut(auth) } catch {}
@@ -303,7 +321,12 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
             canJoinLeaderboard={cloud}
             onNewGame={(difficulty, goal) => {
               persistDefaultGoal(goal)
-              onSelectSlot({ slotIndex: i, isNew: true, difficulty, cashFlowGoal: goal })
+              if (cloud) {
+                // Logged-in: offer leaderboard signup before the game starts.
+                setPendingNewGame({ slotIndex: i, difficulty, goal })
+              } else {
+                onSelectSlot({ slotIndex: i, isNew: true, difficulty, cashFlowGoal: goal })
+              }
             }}
             onContinue={(goal) => onSelectSlot({ slotIndex: i, isNew: false, cashFlowGoal: goal })}
             onDelete={() => handleDelete(i)}
@@ -320,6 +343,14 @@ export default function SlotScreen({ user, onSelectSlot, onLogout }) {
           uid={user.id}
           onConfirm={(profile) => handleSlotJoinConfirm(joiningSlot, profile)}
           onClose={() => setJoiningSlot(null)}
+        />
+      )}
+      {pendingNewGame && (
+        <LeaderboardSignupModal
+          uid={user.id}
+          cancelLabel="Skip for Now"
+          onConfirm={(profile) => startPendingNewGame(profile)}
+          onClose={() => startPendingNewGame(null)}
         />
       )}
     </div>

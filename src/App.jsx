@@ -19,7 +19,7 @@ const isCloudUser = (user) => user?.id && user.id !== 'guest'
 // Auto-saves to Firestore after every month advance and property purchase
 // (for signed-in users). Guest saves remain localStorage-only.
 
-function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }) {
+function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, leaderboardProfile, onExit }) {
   const { state, dispatch } = useGame()
   const [ready, setReady]   = useState(false)
   const cloud               = isCloudUser(user)
@@ -46,7 +46,9 @@ function GameInSlot({ user, slotIndex, isNew, difficulty, cashFlowGoal, onExit }
       console.log('[GameInSlot] init —', { uid: user.id, slotIndex, isNew, cloud, difficulty, goal })
 
       if (isNew) {
-        dispatch(startNewGame(difficulty || 'medium', goal))
+        // leaderboardProfile is set when the player opted into the
+        // leaderboard from the new-game signup prompt; null otherwise.
+        dispatch(startNewGame(difficulty || 'medium', goal, leaderboardProfile))
       } else if (cloud) {
         try {
           const slot = await loadSlotFromFirestore(user.id, slotIndex)
@@ -255,6 +257,7 @@ function AppContent() {
         isNew={activeSlot.isNew}
         difficulty={activeSlot.difficulty}
         cashFlowGoal={activeSlot.cashFlowGoal}
+        leaderboardProfile={activeSlot.leaderboardProfile ?? null}
         onExit={() => setActiveSlot(null)}
       />
     </GameProvider>

@@ -120,7 +120,8 @@ export function gameReducer(state, action) {
         gameStarted:   true,
         // Mint a stable run id for this new game (leaderboard identity).
         runId:         generateRunId(),
-        leaderboardProfile: null,
+        // Opt-in leaderboard profile, if the player joined at new-game time.
+        leaderboardProfile: action.payload.leaderboardProfile ?? null,
         // Seed reporting with starting cash + month so the report can show
         // "started with X, ended with Y" later.
         reporting: initializeReportingState({
