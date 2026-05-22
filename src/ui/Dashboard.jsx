@@ -25,6 +25,14 @@ import LeaderboardScreen from './LeaderboardScreen.jsx'
 import LeaderboardSignupModal from './LeaderboardSignupModal.jsx'
 import LeaderboardTopFiveModal from './LeaderboardTopFiveModal.jsx'
 
+// The Firebase debug panel is a developer diagnostic tool, not part of the
+// normal player UI. It renders only during local development, or on the live
+// site when ?debug=1 is appended to the URL — never for regular players.
+const DEBUG_PANEL_ENABLED =
+  import.meta.env.DEV ||
+  (typeof window !== 'undefined' &&
+   new URLSearchParams(window.location.search).get('debug') === '1')
+
 // ─── FirebaseDebugPanel ────────────────────────────────────
 function FirebaseDebugPanel({ user, slotIndex, debugInfo, onTestWrite, leaderboard }) {
   const [open, setOpen] = useState(false)
@@ -288,7 +296,7 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
         />
       )}
 
-      {debugInfo && (
+      {debugInfo && DEBUG_PANEL_ENABLED && (
         <FirebaseDebugPanel
           user={user}
           slotIndex={slotIndex}
