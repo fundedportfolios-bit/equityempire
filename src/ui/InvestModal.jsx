@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useGame } from '../core/gameState.js'
 import { buyProperty } from '../core/gameEngine.js'
-import { generatePropertyOptions, canAffordOption } from '../systems/propertySystem.js'
+import { generatePropertyOptions, generateBeginnerPickOptions, canAffordOption } from '../systems/propertySystem.js'
 import { formatCurrency, formatShort, formatCashFlow } from '../utils/formatters.js'
 import PropertyIcon from './PropertyIcon.jsx'
 
@@ -16,6 +16,9 @@ function PropertyOption({ option, playerCash, onBuy }) {
     <div className={`option-card${!canAfford ? ' option-card--unaffordable' : ''}`}>
       {option.isHotDeal && (
         <div className="hot-deal-banner">🔥 HOT DEAL FOUND!</div>
+      )}
+      {option.isBeginnerPick && !option.isHotDeal && (
+        <div className="beginner-pick-banner">⭐ BEGINNER PICK — Recommended first purchase</div>
       )}
       <div className="option-header">
         <div className="option-header-left">
@@ -142,15 +145,18 @@ function PropertyOption({ option, playerCash, onBuy }) {
   )
 }
 
-export default function InvestModal({ onClose }) {
+export default function InvestModal({ onClose, forceMode = false }) {
   const { state, dispatch } = useGame()
   const [options, setOptions] = useState([])
 
   // Generate options once when the modal opens.
-  // Hot deal always lands at the top; other options sort by highest projected
-  // net cash flow first (best earner up top).
+  // In forceMode (Easy-mode first-purchase coach), we surface a single
+  // calibrated Beginner Pick instead of the normal market roll — the player
+  // must buy it to proceed.
   useEffect(() => {
-    const opts = generatePropertyOptions(state)
+    const opts = forceMode
+      ? generateBeginnerPickOptions(state)
+      : generatePropertyOptions(state)
     const hot  = opts.filter(o => o.isHotDeal)
     const rest = opts.filter(o => !o.isHotDeal).sort(
       (a, b) => (b.netCashFlow ?? 0) - (a.netCashFlow ?? 0)
@@ -164,8 +170,9 @@ export default function InvestModal({ onClose }) {
     onClose()
   }
 
-  // Close on overlay click
+  // Close on overlay click — disabled in forceMode (coach controls flow).
   function handleOverlayClick(e) {
+    if (forceMode) return
     if (e.target === e.currentTarget) onClose()
   }
 
@@ -174,15 +181,21 @@ export default function InvestModal({ onClose }) {
       <div className="modal-sheet">
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">Properties Currently For Sale</h2>
+            <h2 className="modal-title">
+              {forceMode ? 'Make Your First Purchase' : 'Properties Currently For Sale'}
+            </h2>
             <p className="modal-subtitle modal-subtitle--hint">
-              Close and re-open for more options
+              {forceMode
+                ? 'Buy this property to start building your portfolio.'
+                : 'Close and re-open for more options'}
             </p>
             <p className="modal-subtitle">
               Available cash: <strong>{formatShort(state.cash)}</strong>
             </p>
           </div>
-          <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
+          {!forceMode && (
+            <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
+          )}
         </div>
 
         <div className="modal-body">

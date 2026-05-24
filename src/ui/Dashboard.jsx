@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useGame } from '../core/gameState.js'
-import { setModalOpen, toggleTrivia, openInvestModal, dismissWin, markTutorialSeen, setLeaderboardProfile } from '../core/gameEngine.js'
+import { setModalOpen, toggleTrivia, openInvestModal, dismissWin, markTutorialSeen, setLeaderboardProfile, setCoachSeen, setEquityHintShown, setPaused } from '../core/gameEngine.js'
 import { useMarketRate } from '../hooks/useMarketRate.js'
 import { useActivityLogger } from '../hooks/useActivityLogger.js'
 import { useLeaderboardSync } from '../hooks/useLeaderboardSync.js'
@@ -24,6 +24,10 @@ import TutorialOverlay from './TutorialOverlay.jsx'
 import LeaderboardScreen from './LeaderboardScreen.jsx'
 import LeaderboardSignupModal from './LeaderboardSignupModal.jsx'
 import LeaderboardTopFiveModal from './LeaderboardTopFiveModal.jsx'
+import CoachOverlay           from './CoachOverlay.jsx'
+import EquityHintModal        from './EquityHintModal.jsx'
+import { getMaxRefiNetCash }  from '../systems/loanSystem.js'
+import { PROPERTY_TYPES }     from '../data/propertyTypes.js'
 
 // The Firebase debug panel is a developer diagnostic tool, not part of the
 // normal player UI. It renders only during local development, or on the live
@@ -92,6 +96,11 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   const [signupOpen,      setSignupOpen]      = useState(false)
   const lbPromptedRef = useRef(false)  // session flag — only prompt to join once
 
+  // ─── Easy-mode first-purchase coach + cross-mode equity hint ──
+  // coachStep: null | 'wait_invest' | 'force_invest_click' | 'force_purchase' | 'force_upgrade'
+  const [coachStep,      setCoachStep]      = useState(null)
+  const [equityHintOpen, setEquityHintOpen] = useState(false)
+
   useMarketRate(dispatch)
   // Fire-and-forget gameplay activity events to /api/logGameActivity.
   // Failures swallowed — never blocks rendering or dispatches anything.
@@ -138,6 +147,101 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
     dispatch(setModalOpen(false))
   }
 
+  // ─── Easy-mode coach — start trigger ──────────────────────────
+  // Only on Easy, only on the first run through this slot (matches the
+  // tutorialSeen gate). Kicks off once the tutorial has been closed/skipped
+  // and the player hasn't bought a property yet.
+  useEffect(() => {
+    if (coachStep !== null) return
+    if (state.coachSeen) return
+    if (state.difficulty !== 'easy') return
+    if (!state.tutorialSeen) return
+    if (state.properties.length > 0) return
+    setCoachStep('wait_invest')
+  }, [state.tutorialSeen, state.coachSeen, state.difficulty, state.properties.length, coachStep])
+
+  // 5-second grace window: if the player clicks Invest on their own, fine.
+  // Otherwise promote to forced (pause + pointer overlay).
+  useEffect(() => {
+    if (coachStep !== 'wait_invest') return
+    const t = setTimeout(() => setCoachStep('force_invest_click'), 5000)
+    return () => clearTimeout(t)
+  }, [coachStep])
+
+  // When the forced stage activates, pause the game so nothing advances.
+  useEffect(() => {
+    if (coachStep === 'force_invest_click') {
+      dispatch(setPaused(true))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachStep])
+
+  // After the forced purchase lands, advance to the forced-upgrade stage
+  // and auto-open the upgrade modal for the newly purchased property.
+  useEffect(() => {
+    if (coachStep !== 'force_purchase') return
+    if (state.properties.length < 1) return
+    const newProp = state.properties[0]
+    setCoachStep('force_upgrade')
+    setActiveModal({ type: 'upgrade', propertyId: newProp.id })
+    dispatch(setModalOpen(true))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachStep, state.properties.length])
+
+  // Coach completion: any upgrade installed closes the loop — flip
+  // coachSeen, unpause, close the modal.
+  useEffect(() => {
+    if (coachStep !== 'force_upgrade') return
+    const totalUpgrades = state.properties.reduce(
+      (n, p) => n + (p.completedUpgrades?.length || 0), 0,
+    )
+    if (totalUpgrades < 1) return
+    setCoachStep(null)
+    dispatch(setCoachSeen())
+    dispatch(setPaused(false))
+    dispatch(setModalOpen(false))
+    setActiveModal(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachStep, state.properties])
+
+  // ─── Cross-mode equity-hint popup ─────────────────────────────
+  // Fires once when any owned property's max cash-out refi nets ≥ its
+  // original down payment — i.e. the player could refi out everything
+  // they put down and redeploy it. Click anywhere to dismiss.
+  useEffect(() => {
+    if (state.equityHintShown) return
+    if (equityHintOpen) return
+    if (state.properties.length === 0) return
+    const ready = state.properties.some(p => {
+      const tpl = PROPERTY_TYPES.find(t => t.id === p.templateId)
+      const dpp = (tpl?.downPaymentPercent || 25) / 100
+      const downPaymentPaid = (p.purchasePrice || 0) * dpp
+      const netCash = getMaxRefiNetCash(p, state)
+      return netCash > 0 && netCash >= downPaymentPaid
+    })
+    if (ready) {
+      setEquityHintOpen(true)
+      dispatch(setModalOpen(true))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.properties, state.equityHintShown, state.marketInterestRate])
+
+  function dismissEquityHint() {
+    setEquityHintOpen(false)
+    dispatch(setModalOpen(false))
+    dispatch(setEquityHintShown())
+  }
+
+  // Invest click — wraps the existing open so the coach can observe and
+  // advance straight from "waiting" or "forced pointer" into "force purchase".
+  function handleInvestClick() {
+    if (coachStep === 'wait_invest' || coachStep === 'force_invest_click') {
+      setCoachStep('force_purchase')
+    }
+    dispatch(openInvestModal())
+    setActiveModal({ type: 'invest' })
+  }
+
   // Auto-launch the tutorial on the first render of a brand-new game
   // (i.e. when state.tutorialSeen is false AND the player hasn't built
   // anything yet — portfolioValue > $1 means this is an in-progress game
@@ -170,6 +274,9 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   }
 
   function closeModal() {
+    // During the Easy-mode coach, modal close is driven by the state machine,
+    // not the user — block stray close attempts (overlay click, Esc, etc.).
+    if (coachStep === 'force_purchase' || coachStep === 'force_upgrade') return
     dispatch(setModalOpen(false))
     setActiveModal(null)
   }
@@ -227,7 +334,7 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       </header>
 
       <ActionPanel
-        onInvest={() => { dispatch(openInvestModal()); setActiveModal({ type: 'invest' }) }}
+        onInvest={handleInvestClick}
         onManage={() => openModal({ type: 'upgradeAll' })}
         onRefinance={() => openModal({ type: 'portfolioRefi' })}
         onStaff={() => openModal({ type: 'staff' })}
@@ -244,10 +351,14 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       </main>
 
       {activeModal?.type === 'invest' && (
-        <InvestModal onClose={closeModal} />
+        <InvestModal forceMode={coachStep === 'force_purchase'} onClose={closeModal} />
       )}
       {activeModal?.type === 'upgrade' && (
-        <UpgradeModal propertyId={activeModal.propertyId} onClose={closeModal} />
+        <UpgradeModal
+          propertyId={activeModal.propertyId}
+          forceMode={coachStep === 'force_upgrade'}
+          onClose={closeModal}
+        />
       )}
       {activeModal?.type === 'sellRefi' && (
         <SellRefiModal propertyId={activeModal.propertyId} onClose={closeModal} />
@@ -294,6 +405,15 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
           rank={topFive.rank}
           onClose={dismissTopFive}
         />
+      )}
+      {coachStep === 'force_invest_click' && (
+        <CoachOverlay
+          target="action-invest"
+          message="Tap Invest to make your first property purchase."
+        />
+      )}
+      {equityHintOpen && (
+        <EquityHintModal onDismiss={dismissEquityHint} />
       )}
 
       {debugInfo && DEBUG_PANEL_ENABLED && (

@@ -61,7 +61,7 @@ function UpgradeRow({ upgrade, playerCash, onInstall }) {
   )
 }
 
-export default function UpgradeModal({ propertyId, onClose }) {
+export default function UpgradeModal({ propertyId, onClose, forceMode = false }) {
   const { state, dispatch } = useGame()
   const property = state.properties.find(p => p.id === propertyId)
 
@@ -92,6 +92,8 @@ export default function UpgradeModal({ propertyId, onClose }) {
   }
 
   function handleOverlayClick(e) {
+    // Force-mode (Easy-mode coach): only an upgrade install can dismiss this.
+    if (forceMode) return
     if (e.target === e.currentTarget) onClose()
   }
 
@@ -104,8 +106,15 @@ export default function UpgradeModal({ propertyId, onClose }) {
               <PropertyIcon emoji={property.icon} image={property.iconImage} templateId={property.templateId} inline /> {property.name} — Upgrades
             </h2>
             <p className="modal-subtitle">Cash: <strong>{formatShort(state.cash)}</strong> · Sorted by ROI</p>
+            {forceMode && (
+              <p className="modal-subtitle modal-subtitle--hint">
+                Install one upgrade to continue.
+              </p>
+            )}
           </div>
-          <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
+          {!forceMode && (
+            <button className="modal-close-btn" onClick={onClose} aria-label="Close">×</button>
+          )}
         </div>
         <div className="modal-body">
           {upgrades.length === 0

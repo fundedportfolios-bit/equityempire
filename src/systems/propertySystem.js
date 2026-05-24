@@ -356,6 +356,44 @@ function findAffordableHotDeal(template, difficulty, apr, cash) {
   return null
 }
 
+// ─── Beginner Pick (Easy-mode first-purchase coach) ────────────────────
+// A single calibrated Single LTR with similar characteristics to a Hot Deal
+// (good condition, low price, positive CF) but NOT labelled a Hot Deal.
+// Capped so cashNeeded ≤ ~55% of current cash, leaving plenty of buffer for
+// maintenance events and a few upgrades after the buy.
+function findAffordableBeginnerPick(template, difficulty, apr, cash) {
+  const opts = {
+    allowedConditionIds: ['good', 'excellent'],
+    excludeArchetypeIds: ['overpriced'],
+    forceLowPrice: true,
+    yieldBoost: 1.2,
+    requirePositiveCashFlow: true,
+  }
+  const cashCap = cash * 0.55
+  for (let i = 0; i < 24; i++) {
+    const opt = generateOption(template, difficulty, apr, opts)
+    if (opt.cashNeeded <= cashCap && isProjectedPositive(opt)) {
+      return { ...opt, isBeginnerPick: true }
+    }
+  }
+  // Fallback so the coach never deadlocks: any affordable positive-CF roll.
+  for (let i = 0; i < 12; i++) {
+    const opt = generateOption(template, difficulty, apr, opts)
+    if (opt.cashNeeded <= cash && isProjectedPositive(opt)) {
+      return { ...opt, isBeginnerPick: true }
+    }
+  }
+  return null
+}
+
+export function generateBeginnerPickOptions(state) {
+  const apr      = (state.marketInterestRate ?? 0.0678) + 0.012
+  const template = PROPERTY_TYPES.find(pt => pt.id === 'single_ltr')
+  if (!template) return []
+  const pick = findAffordableBeginnerPick(template, state.difficulty, apr, state.cash)
+  return pick ? [pick] : []
+}
+
 // ─── Instance creation ─────────────────────────────────────────
 // Converts a generated option into the property object stored in state.
 // Uses `monthlyRent` to match existing PropertyCard + portfolio math expectations.

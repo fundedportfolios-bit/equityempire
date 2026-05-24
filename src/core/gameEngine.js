@@ -164,6 +164,14 @@ export function submitReportRequest(playerInfo) {
   return { type: 'SUBMIT_REPORT_REQUEST', payload: { playerInfo } }
 }
 
+export function setCoachSeen() {
+  return { type: 'SET_COACH_SEEN' }
+}
+
+export function setEquityHintShown() {
+  return { type: 'SET_EQUITY_HINT_SHOWN' }
+}
+
 export function setLeaderboardProfile(profile) {
   // profile: full leaderboardProfile object (or null). Owned by the
   // leaderboard sync layer — see systems/leaderboardSystem.js.

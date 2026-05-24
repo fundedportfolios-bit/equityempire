@@ -101,6 +101,11 @@ export const INITIAL_STATE = {
   runId: null,
   leaderboardProfile: null,
 
+  // Easy-mode first-purchase coach + cross-mode equity-hint popup. Both flip
+  // once per game and persist with the save so the prompts don't repeat.
+  coachSeen:       false,
+  equityHintShown: false,
+
   // Reporting (captures gameplay data for the future emailed game report)
   reporting: REPORTING_DEFAULTS,
 
@@ -122,6 +127,9 @@ export function gameReducer(state, action) {
         runId:         generateRunId(),
         // Opt-in leaderboard profile, if the player joined at new-game time.
         leaderboardProfile: action.payload.leaderboardProfile ?? null,
+        // Coach + equity hint reset on every new game (per-save flags).
+        coachSeen:       false,
+        equityHintShown: false,
         // Seed reporting with starting cash + month so the report can show
         // "started with X, ended with Y" later.
         reporting: initializeReportingState({
@@ -1047,6 +1055,8 @@ export function gameReducer(state, action) {
         // stable identity; carry the existing leaderboardProfile if present.
         runId:              saved.runId || generateRunId(),
         leaderboardProfile: saved.leaderboardProfile ?? null,
+        coachSeen:          saved.coachSeen ?? false,
+        equityHintShown:    saved.equityHintShown ?? false,
         gameStarted:   true,
       }
     }
@@ -1075,6 +1085,12 @@ export function gameReducer(state, action) {
       // Replaces the whole leaderboardProfile object. The leaderboard sync
       // layer owns this object and passes a fully-formed replacement.
       return { ...state, leaderboardProfile: action.payload.profile }
+
+    case 'SET_COACH_SEEN':
+      return { ...state, coachSeen: true }
+
+    case 'SET_EQUITY_HINT_SHOWN':
+      return { ...state, equityHintShown: true }
 
     case 'SUBMIT_REPORT_REQUEST': {
       const { playerInfo } = action.payload || {}
