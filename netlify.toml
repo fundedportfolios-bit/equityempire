@@ -32,3 +32,14 @@
   for = "/leaderboard-embed"
   [headers.values]
     Content-Security-Policy = "frame-ancestors *;"
+
+# ── Private admin stats page — never index, never cache ──
+# Token-gated all-time stats lives at /admin/<TOKEN>. These headers keep
+# search engines out of the page (even if the URL ever leaks) and prevent
+# any CDN / browser caching of the response. The API endpoint also sends
+# `Cache-Control: no-store` in its own response.
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    X-Robots-Tag  = "noindex, nofollow"
+    Cache-Control = "no-store"

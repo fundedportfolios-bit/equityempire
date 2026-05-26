@@ -11,6 +11,7 @@ import LoginScreen                                      from './ui/LoginScreen.j
 import SlotScreen                                       from './ui/SlotScreen.jsx'
 import Dashboard                                        from './ui/Dashboard.jsx'
 import LeaderboardEmbed                                 from './embed/LeaderboardEmbed.jsx'
+import AdminStatsPage                                   from './admin/AdminStatsPage.jsx'
 
 const isCloudUser = (user) => user?.id && user.id !== 'guest'
 
@@ -273,6 +274,12 @@ export default function App() {
   if (typeof window !== 'undefined' &&
       window.location.pathname.replace(/\/+$/, '').toLowerCase() === '/leaderboard-embed') {
     return <LeaderboardEmbed />
+  }
+  // Private all-time stats admin page — pathname /admin/<TOKEN>. Token
+  // is enforced server-side too, so a wrong/missing token shows "Not found".
+  if (typeof window !== 'undefined') {
+    const adminMatch = window.location.pathname.match(/^\/admin\/([A-Za-z0-9_-]+)\/?$/)
+    if (adminMatch) return <AdminStatsPage token={adminMatch[1]} />
   }
   return <AppContent />
 }

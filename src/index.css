@@ -3784,3 +3784,179 @@ body {
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   z-index: 9101;
 }
+
+/* ─── Admin All-Time Stats page (/admin/<TOKEN>) ─── */
+.adm-root {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px 12px;
+  background: #0a0f17;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #e2e8f0;
+  display: flex;
+  justify-content: center;
+}
+.adm-root *, .adm-root *::before, .adm-root *::after { box-sizing: border-box; }
+.adm-card {
+  width: 100%;
+  max-width: 1100px;
+  background: linear-gradient(165deg, #16202e 0%, #0f1722 100%);
+  border: 1px solid #2d3a4d;
+  border-radius: 16px;
+  padding: 24px clamp(16px, 3vw, 32px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.adm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.adm-title {
+  margin: 0;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  color: #f8fafc;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.adm-subtitle {
+  margin: 0 0 24px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+.adm-refresh {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  border: 1px solid #3a4a5e;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.adm-refresh:hover { background: rgba(255, 255, 255, 0.12); }
+.adm-section {
+  margin: 28px 0 6px;
+  color: #f59e0b;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #2a3a52;
+  padding-bottom: 6px;
+}
+.adm-section-sub {
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.adm-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.adm-tile {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #283546;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.adm-tile-value {
+  color: #f8fafc;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.adm-tile-label {
+  color: #94a3b8;
+  font-size: 0.74rem;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.adm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 4px;
+}
+.adm-row {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #283546;
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+.adm-row-warn {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+.adm-row-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+  margin-bottom: 6px;
+}
+.adm-row-name {
+  color: #f8fafc;
+  font-weight: 700;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+.adm-row-tag {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  word-break: break-all;
+}
+.adm-row-tag-warn { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.adm-row-when {
+  color: #64748b;
+  font-size: 0.78rem;
+  margin-left: auto;
+}
+.adm-row-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+.adm-row-stats strong { color: #f1f5f9; font-weight: 700; }
+.adm-row-detail {
+  margin: 4px 0 6px;
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  font-style: italic;
+  border-left: 2px solid #f59e0b;
+  padding-left: 10px;
+}
+.adm-empty {
+  color: #5b6b80;
+  font-style: italic;
+  font-size: 0.88rem;
+  margin: 8px 0;
+}
+.adm-loading {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 60px 0;
+  margin: 0;
+}
+.adm-not-found {
+  color: #5b6b80;
+  font-size: 1.6rem;
+  text-align: center;
+  padding: 80px 0;
+  margin: 0;
+  font-weight: 600;
+}

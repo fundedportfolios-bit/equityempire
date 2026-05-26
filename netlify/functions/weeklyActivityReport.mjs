@@ -11,6 +11,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { getFirebaseAdmin } from './utils/firebaseAdmin.mjs'
+import { aggregateActivity } from './utils/aggregateActivity.mjs'
 
 export const config = {
   schedule: '0 13 * * 1',
@@ -62,101 +63,9 @@ async function sendViaResend(apiKey, message) {
 }
 
 // ─── Aggregation ───────────────────────────────────────────────
-function aggregate(events) {
-  const byActor = new Map()   // key = uid:<id> or guest:<id>
-  const sessionIds = new Set()
-  const supportEvents = []
-
-  let totalEvents       = events.length
-  let reportRequests    = 0
-  let supportRequests   = 0
-  let goalsReached      = 0
-  let propertyEvents    = 0
-  let refiEvents        = 0
-  let upgradeEvents     = 0
-  let staffEvents       = 0
-  let uniqueLoggedIn    = new Set()
-  let uniqueGuests      = new Set()
-
-  for (const e of events) {
-    if (e.sessionId) sessionIds.add(e.sessionId)
-    const isUid = !!e.uid
-    const actorKey = isUid ? `uid:${e.uid}` : `guest:${e.guestId || 'unknown'}`
-    if (isUid) uniqueLoggedIn.add(e.uid)
-    else if (e.guestId) uniqueGuests.add(e.guestId)
-
-    if (!byActor.has(actorKey)) {
-      byActor.set(actorKey, {
-        key:              actorKey,
-        isUid,
-        id:               isUid ? e.uid : (e.guestId || 'unknown'),
-        sessions:         new Set(),
-        highestCashFlow:  -Infinity,
-        highestPortfolio: -Infinity,
-        highestEquity:    -Infinity,
-        propertiesOwned:  0,
-        reportRequests:   0,
-        supportRequested: false,
-        lastActiveAt:     null,
-        playerName:       null,
-        playerEmail:      null,
-      })
-    }
-    const a = byActor.get(actorKey)
-    if (e.sessionId) a.sessions.add(e.sessionId)
-    if (Number.isFinite(e.monthlyCashFlow)) a.highestCashFlow  = Math.max(a.highestCashFlow,  e.monthlyCashFlow)
-    if (Number.isFinite(e.portfolioValue))  a.highestPortfolio = Math.max(a.highestPortfolio, e.portfolioValue)
-    if (Number.isFinite(e.totalEquity))     a.highestEquity    = Math.max(a.highestEquity,    e.totalEquity)
-    if (Number.isFinite(e.propertiesOwned)) a.propertiesOwned  = Math.max(a.propertiesOwned,  e.propertiesOwned)
-    if (e.eventType === 'report_requested') { reportRequests++; a.reportRequests++ }
-    if (e.eventType === 'support_requested') {
-      supportRequests++
-      a.supportRequested = true
-      supportEvents.push(e)
-    }
-    if (e.eventType === 'goal_reached')          goalsReached++
-    if (e.eventType === 'property_acquired')     propertyEvents++
-    if (e.eventType === 'refinance_completed')   refiEvents++
-    if (e.eventType === 'upgrade_completed')     upgradeEvents++
-    if (e.eventType === 'staff_hired')           staffEvents++
-
-    if (e.playerName && !a.playerName)   a.playerName = e.playerName
-    if (e.playerEmail && !a.playerEmail) a.playerEmail = e.playerEmail
-    const ts = e.createdAt?.toDate ? e.createdAt.toDate() : (e.createdAt ? new Date(e.createdAt) : null)
-    if (ts && (!a.lastActiveAt || ts > a.lastActiveAt)) a.lastActiveAt = ts
-  }
-
-  // Build top-N actor list — sort by sessions then by highestPortfolio
-  const topActors = Array.from(byActor.values())
-    .map(a => ({
-      ...a,
-      sessionCount: a.sessions.size,
-      highestCashFlow:  a.highestCashFlow  === -Infinity ? null : a.highestCashFlow,
-      highestPortfolio: a.highestPortfolio === -Infinity ? null : a.highestPortfolio,
-      highestEquity:    a.highestEquity    === -Infinity ? null : a.highestEquity,
-    }))
-    .sort((a, b) =>
-      ((b.highestPortfolio ?? 0) - (a.highestPortfolio ?? 0)) ||
-      (b.sessionCount - a.sessionCount)
-    )
-    .slice(0, 25)
-
-  return {
-    totalEvents,
-    sessionCount:     sessionIds.size,
-    uniqueLoggedIn:   uniqueLoggedIn.size,
-    uniqueGuests:     uniqueGuests.size,
-    reportRequests,
-    supportRequests,
-    goalsReached,
-    propertyEvents,
-    refiEvents,
-    upgradeEvents,
-    staffEvents,
-    topActors,
-    supportEvents,
-  }
-}
+// Implementation lives in ./utils/aggregateActivity.mjs and is shared
+// with the all-time admin stats endpoint. Kept identical so the weekly
+// email and the admin page never drift apart.
 
 // ─── Email composition ─────────────────────────────────────────
 function buildHtml(stats, range) {
@@ -315,7 +224,7 @@ export default async () => {
   }
 
   const events = snap.docs.map(d => d.data())
-  const stats  = aggregate(events)
+  const stats  = aggregateActivity(events)
 
   console.log('[weeklyActivityReport] events:', stats.totalEvents,
     'sessions:', stats.sessionCount,
