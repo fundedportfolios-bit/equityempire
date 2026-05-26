@@ -22,6 +22,9 @@
 // (b) REPORT_OWNER_EMAIL — and (b) only when requestedSupport is true.
 // ═══════════════════════════════════════════════════════════════
 
+import { getFirebaseAdmin } from './utils/firebaseAdmin.mjs'
+import { normalizeEmail, buildUnsubscribeUrl } from './utils/unsubscribeToken.mjs'
+
 export const config = {
   path: '/api/sendReport',
 }
@@ -58,7 +61,7 @@ function esc(s) {
 }
 
 // ─── HTML report (player-facing) ──────────────────────────────
-function buildPlayerHtml(payload, playerName) {
+function buildPlayerHtml(payload, playerName, unsubUrl) {
   const s   = payload?.summary || {}
   const m   = payload?.milestones || {}
   const pb  = payload?.propertyBreakdown || {}
@@ -201,9 +204,12 @@ function buildPlayerHtml(payload, playerName) {
         or lending advice.
       </div>
 
-      <p style="margin-top:18px;font-size:12px;color:#9aa5b1;">
+      <p style="margin-top:18px;font-size:12px;color:#9aa5b1;line-height:1.55;text-align:center;">
         You received this because you requested a report from Equity Empire.
-        Your email is only used to send this report.
+        Your email is only used to send this report and respond if you asked for follow-up.
+        ${unsubUrl
+          ? `<br>Don't want these emails? <a href="${unsubUrl}" style="color:#9aa5b1;text-decoration:underline;">Unsubscribe</a>.`
+          : ''}
       </p>
     </div>
   </div>
@@ -211,7 +217,7 @@ function buildPlayerHtml(payload, playerName) {
 }
 
 // ─── Plain-text fallback ──────────────────────────────────────
-function buildPlayerText(payload, playerName) {
+function buildPlayerText(payload, playerName, unsubUrl) {
   const s = payload?.summary || {}
   const lines = [
     `Hi ${playerName},`,
@@ -240,6 +246,9 @@ function buildPlayerText(payload, playerName) {
     '',
     'Disclaimer: Equity Empire is a game and educational tool. This report is',
     'based on gameplay results and is not investment, tax, legal, or lending advice.',
+    '',
+    'You received this because you requested a report from Equity Empire.',
+    ...(unsubUrl ? [`Unsubscribe: ${unsubUrl}`] : []),
   ]
   return lines.join('\n')
 }
@@ -369,6 +378,40 @@ export default async (req) => {
   }
 
   const requestedSupport = pref === 'requestSupport'
+  const normalizedEmail  = normalizeEmail(email)
+
+  // ── Opt-out check ───────────────────────────────────────────────────
+  // If this address previously unsubscribed via /api/unsubscribe, do NOT
+  // send another email. Fail-open if Firebase Admin is unavailable so a
+  // transient Firestore outage doesn't block a player's report.
+  const unsubSecret = process.env.UNSUBSCRIBE_SECRET || ''
+  try {
+    const fb = await getFirebaseAdmin()
+    if (fb.hasAdmin) {
+      const doc = await fb.db.collection('emailOptOut').doc(normalizedEmail).get()
+      if (doc.exists) {
+        console.log('[sendReport] Recipient previously unsubscribed:', normalizedEmail)
+        return json({
+          ok: false,
+          error: "This email address has unsubscribed from Equity Empire emails. " +
+                 "Reply to a prior email if you'd like us to re-subscribe you.",
+        }, 400, corsHeaders)
+      }
+    }
+  } catch (e) {
+    console.warn('[sendReport] opt-out check failed (sending anyway):', e?.message)
+  }
+
+  // Build the unsubscribe URL once per request. Site URL is auto-provided
+  // by Netlify in the URL env var; SITE_URL is a manual override.
+  const siteUrl  = process.env.URL || process.env.SITE_URL || ''
+  const unsubUrl = (siteUrl && unsubSecret)
+    ? buildUnsubscribeUrl(siteUrl, normalizedEmail, unsubSecret)
+    : null
+  if (!unsubUrl) {
+    console.warn('[sendReport] Unsubscribe URL not built — missing URL/SITE_URL or UNSUBSCRIBE_SECRET env. ' +
+                 'Email will send without an unsubscribe footer.')
+  }
 
   // ── Firestore lead storage (intentionally NOT wired up) ──────────────
   // TODO: Persisting a `reportRequests` record from this serverless
@@ -391,9 +434,19 @@ export default async (req) => {
   // when available so it's ready to persist once the above is set up.
 
   // 12/13/14/15/16. Send the detailed report to the PLAYER.
-  const html = buildPlayerHtml(payload, name)
-  const text = buildPlayerText(payload, name)
+  const html = buildPlayerHtml(payload, name, unsubUrl)
+  const text = buildPlayerText(payload, name, unsubUrl)
   const subject = `Your Equity Empire Report — ${payload?.summary?.monthsPlayed ?? '?'} months, ${num(payload?.summary?.finalPortfolioValue)} portfolio`
+
+  // RFC 2369 + RFC 8058: List-Unsubscribe with one-click POST lets Gmail
+  // and Apple Mail show a native "Unsubscribe" button in the message header
+  // and trigger our /api/unsubscribe endpoint without a round-trip click.
+  const playerHeaders = unsubUrl
+    ? {
+        'List-Unsubscribe':      `<${unsubUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      }
+    : undefined
 
   const playerSend = await sendViaResend(apiKey, {
     from:     fromEmail,
@@ -402,6 +455,7 @@ export default async (req) => {
     subject,
     html,
     text,
+    ...(playerHeaders ? { headers: playerHeaders } : {}),
   })
 
   if (!playerSend.ok) {
