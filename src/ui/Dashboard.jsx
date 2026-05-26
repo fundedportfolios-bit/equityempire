@@ -97,7 +97,9 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   const lbPromptedRef = useRef(false)  // session flag — only prompt to join once
 
   // ─── Easy-mode first-purchase coach + cross-mode equity hint ──
-  // coachStep: null | 'wait_invest' | 'force_invest_click' | 'force_purchase' | 'force_upgrade'
+  // coachStep: null | 'force_invest_click' | 'force_purchase' | 'force_upgrade'
+  // Forced immediately on tutorial close so no other UI (Report, etc.) can
+  // sneak in between "tutorial done" and "coach active".
   const [coachStep,      setCoachStep]      = useState(null)
   const [equityHintOpen, setEquityHintOpen] = useState(false)
 
@@ -149,32 +151,20 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
 
   // ─── Easy-mode coach — start trigger ──────────────────────────
   // Only on Easy, only on the first run through this slot (matches the
-  // tutorialSeen gate). Kicks off once the tutorial has been closed/skipped
-  // and the player hasn't bought a property yet.
+  // tutorialSeen gate). Activates the forced Invest stage the moment the
+  // tutorial closes / is skipped — no grace window, because a window let
+  // the player open Report (or any other modal) and then get trapped
+  // underneath the CoachOverlay when it appeared.
   useEffect(() => {
     if (coachStep !== null) return
     if (state.coachSeen) return
     if (state.difficulty !== 'easy') return
     if (!state.tutorialSeen) return
     if (state.properties.length > 0) return
-    setCoachStep('wait_invest')
-  }, [state.tutorialSeen, state.coachSeen, state.difficulty, state.properties.length, coachStep])
-
-  // 5-second grace window: if the player clicks Invest on their own, fine.
-  // Otherwise promote to forced (pause + pointer overlay).
-  useEffect(() => {
-    if (coachStep !== 'wait_invest') return
-    const t = setTimeout(() => setCoachStep('force_invest_click'), 5000)
-    return () => clearTimeout(t)
-  }, [coachStep])
-
-  // When the forced stage activates, pause the game so nothing advances.
-  useEffect(() => {
-    if (coachStep === 'force_invest_click') {
-      dispatch(setPaused(true))
-    }
+    setCoachStep('force_invest_click')
+    dispatch(setPaused(true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coachStep])
+  }, [state.tutorialSeen, state.coachSeen, state.difficulty, state.properties.length, coachStep])
 
   // After the forced purchase lands, advance to the forced-upgrade stage
   // and auto-open the upgrade modal for the newly purchased property.
@@ -233,9 +223,9 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   }
 
   // Invest click — wraps the existing open so the coach can observe and
-  // advance straight from "waiting" or "forced pointer" into "force purchase".
+  // advance from the forced-pointer stage into the forced-purchase stage.
   function handleInvestClick() {
-    if (coachStep === 'wait_invest' || coachStep === 'force_invest_click') {
+    if (coachStep === 'force_invest_click') {
       setCoachStep('force_purchase')
     }
     dispatch(openInvestModal())
