@@ -195,6 +195,20 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
   }, [coachStep, state.properties])
 
   // ─── Cross-mode equity-hint popup ─────────────────────────────
+  // Migration / late-game guard: legacy saves predating this feature load
+  // with equityHintShown=false, which would re-fire the popup on rejoin
+  // for mature games. Silently mark it shown on mount for any run that's
+  // clearly past the early-game phase — they already know the mechanic.
+  useEffect(() => {
+    if (state.equityHintShown) return
+    const refisDone = state.reporting?.totals?.refinancesCompleted || 0
+    const month     = state.currentMonth || 0
+    if (refisDone >= 1 || month > 24 || state.gameWon) {
+      dispatch(setEquityHintShown())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Fires once when any owned property's max cash-out refi nets ≥ its
   // original down payment — i.e. the player could refi out everything
   // they put down and redeploy it. Click anywhere to dismiss.
@@ -202,6 +216,16 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
     if (state.equityHintShown) return
     if (equityHintOpen) return
     if (state.properties.length === 0) return
+    // Don't compete with later-game screens — these all hide the
+    // ActionPanel buttons so the pointer would point at nothing.
+    if (state.gameWon)              return
+    if (state.activeMilestone)      return
+    if (state.activeTriviaQuestion) return
+    // Player has already done refis — they understand the mechanic.
+    if ((state.reporting?.totals?.refinancesCompleted || 0) >= 1) return
+    // Late-game safety net for any save that slipped past the mount-time guard.
+    if ((state.currentMonth || 0) > 24) return
+
     const ready = state.properties.some(p => {
       const tpl = PROPERTY_TYPES.find(t => t.id === p.templateId)
       const dpp = (tpl?.downPaymentPercent || 25) / 100
@@ -214,7 +238,8 @@ export default function Dashboard({ onSave, onExit, slotIndex, user, debugInfo, 
       dispatch(setModalOpen(true))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.properties, state.equityHintShown, state.marketInterestRate])
+  }, [state.properties, state.equityHintShown, state.marketInterestRate,
+      state.gameWon, state.activeMilestone, state.activeTriviaQuestion])
 
   function dismissEquityHint() {
     setEquityHintOpen(false)
