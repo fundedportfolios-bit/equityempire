@@ -3969,3 +3969,36 @@ body {
   margin: 0;
   font-weight: 600;
 }
+
+/* ─── Usage-over-time chart (last 90 days) ─── */
+.adm-chart-wrap {
+  margin-top: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #283546;
+  border-radius: 10px;
+  padding: 12px 14px 8px;
+}
+.adm-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  margin-bottom: 8px;
+}
+.adm-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.adm-chart-peak { margin-left: auto; color: #cbd5e1; font-weight: 600; }
+.adm-chart-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.adm-chart-swatch--signed { background: #f59e0b; }
+.adm-chart-swatch--guest  { background: #475569; }
+.adm-chart {
+  width: 100%;
+  height: 240px;
+  display: block;
+}

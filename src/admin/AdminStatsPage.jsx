@@ -39,6 +39,130 @@ function StatTile({ label, value }) {
   )
 }
 
+// ─── Usage-over-time chart ─────────────────────────────────────────
+// Inline SVG bar chart of daily sessions for the last 90 days, split
+// into signed-in (amber) + guest (slate) for composition at a glance.
+// No chart library — keeps the bundle small. Browser tooltip on hover.
+function UsageChart({ series }) {
+  if (!series || series.length === 0) return null
+
+  // Y-axis scale. Use a minimum of 1 so a brand-new account doesn't
+  // divide by zero. Round the top tick up for readable gridlines.
+  const peak = series.reduce((m, d) => Math.max(m, d.sessions || 0), 0)
+  const yMax = Math.max(1, niceCeil(peak))
+
+  // SVG viewBox geometry — scales to the container width via CSS.
+  const W = 1000
+  const H = 240
+  const padTop    = 14
+  const padBottom = 30
+  const padLeft   = 36
+  const padRight  = 10
+  const chartW = W - padLeft - padRight
+  const chartH = H - padTop - padBottom
+  const gap    = 1
+  const barW   = Math.max(2, (chartW / series.length) - gap)
+
+  const yTicks = [0, 0.5, 1].map(f => ({
+    v: Math.round(yMax * f),
+    y: padTop + chartH * (1 - f),
+  }))
+
+  // X-axis: emit a month label on day 01 (and the first bar).
+  const monthLabels = series
+    .map((d, i) => {
+      if (i === 0 || d.date.slice(8, 10) === '01') {
+        const monthName = new Date(d.date + 'T00:00:00Z')
+          .toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+        return { i, label: monthName }
+      }
+      return null
+    })
+    .filter(Boolean)
+
+  return (
+    <div className="adm-chart-wrap">
+      <div className="adm-chart-legend">
+        <span><i className="adm-chart-swatch adm-chart-swatch--signed" /> Signed-in sessions</span>
+        <span><i className="adm-chart-swatch adm-chart-swatch--guest"  /> Guest sessions</span>
+        <span className="adm-chart-peak">Peak: {peak} session{peak === 1 ? '' : 's'}/day</span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="adm-chart"
+        role="img"
+        aria-label={`Daily sessions for the last ${series.length} days`}
+      >
+        {/* Gridlines + Y labels */}
+        {yTicks.map(t => (
+          <g key={t.v}>
+            <line x1={padLeft} x2={W - padRight} y1={t.y} y2={t.y}
+                  stroke="#283546" strokeDasharray="3,4" strokeWidth="1" />
+            <text x={padLeft - 6} y={t.y + 4} textAnchor="end"
+                  fontSize="11" fill="#94a3b8">{t.v}</text>
+          </g>
+        ))}
+
+        {/* Stacked bars: guest (slate) base + signed-in (amber) on top */}
+        {series.map((d, i) => {
+          const x = padLeft + i * (barW + gap)
+          const guestH  = chartH * ((d.guestSessions    || 0) / yMax)
+          const signedH = chartH * ((d.signedInSessions || 0) / yMax)
+          const guestY  = padTop + chartH - guestH
+          const signedY = guestY - signedH
+          const total   = d.sessions || 0
+          return (
+            <g key={d.date}>
+              {d.guestSessions > 0 && (
+                <rect x={x} y={guestY} width={barW} height={guestH} fill="#475569" />
+              )}
+              {d.signedInSessions > 0 && (
+                <rect x={x} y={signedY} width={barW} height={signedH} fill="#f59e0b" />
+              )}
+              <title>
+                {d.date} · {total} session{total === 1 ? '' : 's'}
+                {' '}({d.signedInSessions} signed-in, {d.guestSessions} guest)
+                {' · '}{d.events} event{d.events === 1 ? '' : 's'}
+                {d.uniqueActors > 0 ? ` · ${d.uniqueActors} unique` : ''}
+              </title>
+            </g>
+          )
+        })}
+
+        {/* Baseline */}
+        <line x1={padLeft} x2={W - padRight}
+              y1={padTop + chartH} y2={padTop + chartH}
+              stroke="#3a4a5e" strokeWidth="1" />
+
+        {/* X-axis month labels */}
+        {monthLabels.map(({ i, label }) => (
+          <text key={i}
+                x={padLeft + i * (barW + gap)}
+                y={H - 10}
+                textAnchor="start"
+                fontSize="11"
+                fill="#94a3b8">
+            {label}
+          </text>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+// Round up to a "nice" number for the y-axis top tick.
+function niceCeil(n) {
+  if (n <= 5)   return 5
+  if (n <= 10)  return 10
+  if (n <= 25)  return 25
+  if (n <= 50)  return 50
+  if (n <= 100) return 100
+  // For larger values, round up to the next multiple of 10^(digits-1).
+  const mag  = Math.pow(10, Math.floor(Math.log10(n)))
+  return Math.ceil(n / mag) * mag
+}
+
 function ActorRow({ a }) {
   return (
     <div className="adm-row">
@@ -153,6 +277,10 @@ export default function AdminStatsPage({ token }) {
           <StatTile label="Upgrades"            value={stats.upgradeEvents.toLocaleString()} />
           <StatTile label="Staff hires"         value={stats.staffEvents.toLocaleString()} />
         </div>
+
+        <h2 className="adm-section">Usage — Last 90 Days</h2>
+        <p className="adm-section-sub">Daily sessions, broken out by signed-in vs guest. Hover a bar for the exact counts.</p>
+        <UsageChart series={stats.dailySeries || []} />
 
         <h2 className="adm-section">Top Players & Guests</h2>
         <p className="adm-section-sub">Sorted by highest portfolio value. Top 25 across all time.</p>

@@ -37,6 +37,59 @@ function sanitizeEvent(e) {
   return { ...e, createdAt: toIso(e.createdAt) }
 }
 
+// Build a zero-filled daily activity series for the last `days` days.
+// One row per UTC day with per-day session + event counts, broken out by
+// signed-in vs guest. Used by the admin page's usage-over-time chart.
+function buildDailySeries(events, days = 90) {
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  const start = new Date(today)
+  start.setUTCDate(start.getUTCDate() - (days - 1))
+
+  // Pre-fill every day in the window with a zero bucket so the chart
+  // renders a continuous timeline even on days with no activity.
+  const buckets = new Map()
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start)
+    d.setUTCDate(d.getUTCDate() + i)
+    const key = d.toISOString().slice(0, 10)
+    buckets.set(key, {
+      date:             key,
+      events:           0,
+      sessions:         new Set(),
+      signedInSessions: new Set(),
+      guestSessions:    new Set(),
+      uniqueActors:     new Set(),
+    })
+  }
+
+  for (const e of events) {
+    const iso = toIso(e.createdAt)
+    if (!iso) continue
+    const dayKey = iso.slice(0, 10)
+    const bucket = buckets.get(dayKey)
+    if (!bucket) continue   // outside the window — ignore
+    bucket.events++
+    const isUid = !!e.uid
+    if (e.sessionId) {
+      bucket.sessions.add(e.sessionId)
+      if (isUid) bucket.signedInSessions.add(e.sessionId)
+      else if (e.guestId) bucket.guestSessions.add(e.sessionId)
+    }
+    const actorKey = isUid ? `uid:${e.uid}` : `guest:${e.guestId || 'unknown'}`
+    bucket.uniqueActors.add(actorKey)
+  }
+
+  return Array.from(buckets.values()).map(b => ({
+    date:             b.date,
+    events:           b.events,
+    sessions:         b.sessions.size,
+    signedInSessions: b.signedInSessions.size,
+    guestSessions:    b.guestSessions.size,
+    uniqueActors:     b.uniqueActors.size,
+  }))
+}
+
 export function aggregateActivity(events) {
   const byActor       = new Map()
   const sessionIds    = new Set()
@@ -150,5 +203,6 @@ export function aggregateActivity(events) {
     topActors,
     supportEvents,
     reportEvents,
+    dailySeries: buildDailySeries(events, 90),
   }
 }
