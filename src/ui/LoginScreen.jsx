@@ -47,7 +47,7 @@ export default function LoginScreen({ onLogin }) {
         <div className="login-divider" />
 
         <div className="login-google-wrap">
-          <p className="login-prompt">Sign in to save your progress across devices</p>
+          <p className="login-prompt">Learn to leverage debt for success using actual lending principles and constraints.</p>
           <button
             className="btn-google-signin"
             onClick={handleGoogleSignIn}
